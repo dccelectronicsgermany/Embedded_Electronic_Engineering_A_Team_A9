@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN'
+  'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+
+<declaration>
+const int N     = 2;
+const int QSIZE = 4;
+
+typedef int[0, N-1]   task_t;
+typedef int[0, QSIZE] qindex_t;
+
+chan request[N];
+chan release[N];
+
+task_t   queue[QSIZE];
+qindex_t head  = 0;
+qindex_t tail  = 0;
+qindex_t count = 0;
+
+bool emergency_active = false;
+bool crossing_active  = false;
+task_t selected = 0;
+
+void enqueue(task_t id) {
+    if (count &lt; QSIZE) {
+        queue[tail] = id;
+        tail = (tail + 1) % QSIZE;
+        count++;
+    }
+}
+
+task_t dequeue() {
+    task_t id = queue[head];
+    head = (head + 1) % QSIZE;
+    count--;
+    return id;
+}
+</declaration>
+
+<template>
+  <name>Vehicle</name>
+  <parameter>const task_t id</parameter>
+  <declaration>clock c;</declaration>
+
+  <location id="id0" x="0" y="0">
+    <name>Idle</name>
+  </location>
+  <location id="id1" x="200" y="0">
+    <name>Requesting</name>
+  </location>
+  <location id="id2" x="400" y="0">
+    <name>Waiting</name>
+  </location>
+  <location id="id3" x="600" y="0">
+    <name>Crossing</name>
+    <label kind="invariant">c &lt;= 10</label>
+  </location>
+  <location id="id4" x="300" y="150">
+    <name>Halted</name>
+  </location>
+
+  <init ref="id0"/>
+
+  <transition>
+    <source ref="id0"/>
+    <target ref="id1"/>
+    <label kind="guard">!emergency_active</label>
+    <label kind="assignment">c = 0</label>
+  </transition>
+
+  <transition>
+    <source ref="id1"/>
+    <target ref="id2"/>
+    <label kind="synchronisation">request[id]!</label>
+    <label kind="assignment">c = 0</label>
+  </transition>
+
+  <transition>
+    <source ref="id2"/>
+    <target ref="id3"/>
+    <label kind="synchronisation">release[id]?</label>
+    <label kind="assignment">c = 0</label>
+  </transition>
+
+  <transition>
+    <source ref="id3"/>
+    <target ref="id0"/>
+    <label kind="guard">c &gt;= 1</label>
+    <label kind="assignment">c = 0, crossing_active = false</label>
+  </transition>
+
+  <transition>
+    <source ref="id2"/>
+    <target ref="id4"/>
+    <label kind="guard">emergency_active</label>
+  </transition>
+
+  <transition>
+    <source ref="id4"/>
+    <target ref="id0"/>
+    <label kind="guard">!emergency_active</label>
+    <label kind="assignment">c = 0</label>
+  </transition>
+
+</template>
+
+<template>
+  <name>Controller</name>
+  <declaration>clock t;</declaration>
+
+  <location id="c0" x="0" y="0">
+    <name>Idle</name>
+  </location>
+  <location id="c1" x="250" y="0">
+    <name>Accepting</name>
+    <label kind="invariant">t &lt;= 2</label>
+  </location>
+  <location id="c2" x="500" y="0">
+    <name>Dequeuing</name>
+    <label kind="invariant">t &lt;= 1</label>
+  </location>
+  <location id="c3" x="500" y="150">
+    <name>Releasing</name>
+    <label kind="invariant">t &lt;= 2</label>
+  </location>
+  <location id="c4" x="250" y="150">
+    <name>Emergency</name>
+  </location>
+
+  <init ref="c0"/>
+
+  <transition>
+    <source ref="c0"/>
+    <target ref="c1"/>
+    <label kind="synchronisation">request[0]?</label>
+    <label kind="guard">count &lt; QSIZE &amp;&amp; !emergency_active</label>
+    <label kind="assignment">enqueue(0), t = 0</label>
+  </transition>
+
+  <transition>
+    <source ref="c0"/>
+    <target ref="c1"/>
+    <label kind="synchronisation">request[1]?</label>
+    <label kind="guard">count &lt; QSIZE &amp;&amp; !emergency_active</label>
+    <label kind="assignment">enqueue(1), t = 0</label>
+  </transition>
+
+  <transition>
+    <source ref="c1"/>
+    <target ref="c2"/>
+    <label kind="guard">count &gt; 0 &amp;&amp; !crossing_active</label>
+    <label kind="assignment">selected = dequeue(), t = 0</label>
+  </transition>
+
+  <transition>
+    <source ref="c2"/>
+    <target ref="c3"/>
+    <label kind="assignment">t = 0</label>
+  </transition>
+
+  <transition>
+    <source ref="c3"/>
+    <target ref="c0"/>
+    <label kind="synchronisation">release[0]!</label>
+    <label kind="guard">selected == 0</label>
+    <label kind="assignment">crossing_active = true, t = 0</label>
+  </transition>
+
+  <transition>
+    <source ref="c3"/>
+    <target ref="c0"/>
+    <label kind="synchronisation">release[1]!</label>
+    <label kind="guard">selected == 1</label>
+    <label kind="assignment">crossing_active = true, t = 0</label>
+  </transition>
+
+  <!-- Emergency only when no vehicle is crossing -->
+  <transition>
+    <source ref="c0"/>
+    <target ref="c4"/>
+    <label kind="guard">!crossing_active</label>
+    <label kind="assignment">emergency_active = true, t = 0</label>
+  </transition>
+
+  <transition>
+    <source ref="c4"/>
+    <target ref="c0"/>
+    <label kind="guard">t &gt;= 2</label>
+    <label kind="assignment">emergency_active = false, t = 0</label>
+  </transition>
+
+</template>
+
+<system>
+vehicle0 = Vehicle(0);
+vehicle1 = Vehicle(1);
+controller = Controller();
+
+system vehicle0, vehicle1, controller;
+</system>
+
+<queries>
+
+  <query>
+    <formula>A[] count &lt;= QSIZE</formula>
+    <comment>Queue never overflows</comment>
+  </query>
+
+  <query>
+    <formula>A[] count &gt;= 0</formula>
+    <comment>Queue never underflows</comment>
+  </query>
+
+  <query>
+    <formula>A[] not deadlock</formula>
+    <comment>System is deadlock free</comment>
+  </query>
+
+  <query>
+    <formula>A[] not (vehicle0.Crossing and vehicle1.Crossing)</formula>
+    <comment>Mutual exclusion: only one vehicle crosses at a time</comment>
+  </query>
+
+  <query>
+    <formula>A[] emergency_active imply (not vehicle0.Crossing and not vehicle1.Crossing)</formula>
+    <comment>During emergency no vehicle crosses</comment>
+  </query>
+
+</queries>
+
+</nta>
