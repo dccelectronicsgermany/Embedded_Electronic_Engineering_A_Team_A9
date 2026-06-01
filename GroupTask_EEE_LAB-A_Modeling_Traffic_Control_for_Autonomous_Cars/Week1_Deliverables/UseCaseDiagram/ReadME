@@ -1,0 +1,4 @@
+Diagrams are made using PlantUML
+The Code in the .md file is what is used to generate the diagrams
+To edit or update any diagram use the code from the .md file in PlantUML and then make any changes.
+Remember to update and the .md code file and also the image if any changes are made.
