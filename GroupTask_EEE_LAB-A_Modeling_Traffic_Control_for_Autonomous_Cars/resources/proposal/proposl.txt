@@ -1,0 +1,372 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,fit,calc}
+
+\geometry{margin=2.2cm}
+\hypersetup{colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue}
+\setlist[itemize]{topsep=2pt,itemsep=2pt,parsep=0pt}
+\setlist[enumerate]{topsep=2pt,itemsep=2pt,parsep=0pt}
+\renewcommand{\arraystretch}{1.25}
+
+\title{Project Proposal: Autonomous Intersection Management Using Critical-Zone Time-Slot Reservation}
+\author{Group A / Team A9}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section*{Purpose of this Document}
+This document proposes a shared system concept for our autonomous intersection project. The goal is to align the whole team before we update the requirements diagram, use-case diagram, activity diagram, sequence diagram, UPPAAL timed automata model, and later the FreeRTOS / HW--SW implementation. The main problem we are solving is not simply ``which car goes first?'' but rather how autonomous vehicles can safely and efficiently share an intersection that contains multiple conflict areas.
+
+\section{Core System Idea}
+We model the autonomous intersection as a real-time shared-resource system. The intersection is the shared resource, vehicles are concurrent processes, and the conflict areas inside the intersection are critical zones. A vehicle may cross the intersection only according to a reservation schedule assigned by the controller.
+
+\begin{quote}
+\textbf{Main safety rule:} No two vehicles may occupy or reserve the same critical zone during overlapping time intervals.
+\end{quote}
+
+This means the system is not limited to allowing only one vehicle to cross. Multiple vehicles may cross simultaneously if their required critical-zone sequences do not conflict in time.
+
+\subsection{Operating-System Analogy}
+\begin{center}
+\begin{tabular}{p{0.42\linewidth}p{0.42\linewidth}}
+\toprule
+\textbf{Operating system concept} & \textbf{Intersection concept} \\
+\midrule
+Process / task & Vehicle \\
+Shared resource & Intersection \\
+Critical section & Critical zone inside the intersection \\
+Scheduler & Intersection controller \\
+Ready queue & Lane queue / waiting vehicles \\
+Resource allocation & Critical-zone time-slot reservation \\
+Deadline / slack time & Latest smooth arrival time before stopping \\
+Deadlock & Vehicles blocking each other inside the intersection \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Proposed Intersection Structure}
+The model should distinguish between the approach area and the actual conflict area. Vehicles are detected before they reach the dangerous part of the intersection. In this approach zone, the controller can manage speed so that vehicles reach the first critical zone at the correct time.
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[
+    node distance=1.1cm,
+    box/.style={draw, rounded corners, minimum width=3.1cm, minimum height=0.9cm, align=center, fill=blue!8},
+    safe/.style={draw, rounded corners, minimum width=3.1cm, minimum height=0.9cm, align=center, fill=green!12},
+    danger/.style={draw, rounded corners, minimum width=3.1cm, minimum height=0.9cm, align=center, fill=red!10},
+    arrow/.style={-{Latex[length=3mm]}, thick}
+]
+
+\node[box] (detect) {Detection Line\\Vehicle enters control zone};
+\node[safe, right=of detect] (control) {Controlled Approach Zone\\Speed adjusted};
+\node[danger, right=of control] (entry) {Entry Line\\First critical zone};
+\node[danger, right=of entry] (intersection) {Intersection\\Critical zones};
+
+\draw[arrow] (detect) -- (control);
+\draw[arrow] (control) -- (entry);
+\draw[arrow] (entry) -- (intersection);
+
+\node[box, below=1.1cm of control] (controller) {Intersection Controller\\Scheduling + reservation};
+\draw[arrow] (detect.south) |- (controller.west) node[pos=0.25,left,align=right] {intent, speed,\ distance};
+\draw[arrow] (controller.east) -| (control.south) node[pos=0.25,right,align=left] {time slot,\ speed command};
+
+\end{tikzpicture}
+\caption{High-level concept: vehicles are controlled before they enter the critical zones.}
+\end{figure}
+
+\section{Critical-Zone Model}
+The intersection should be divided into smaller critical zones. A route is converted into a sequence of zones that the vehicle must reserve. The exact number and shape of zones can be simplified for UPPAAL, but the principle should remain consistent.
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[scale=1.1]
+    \draw[thick] (0,0) rectangle (4,4);
+    \draw[thick] (2,0) -- (2,4);
+    \draw[thick] (0,2) -- (4,2);
+    \node at (1,3) {CZ1};
+    \node at (3,3) {CZ2};
+    \node at (1,1) {CZ3};
+    \node at (3,1) {CZ4};
+
+    \draw[-{Latex[length=3mm]}, very thick, blue] (-0.7,3.2) -- (2.4,3.2) -- (2.5,1.6) -- (2.6,-0.4);
+    \node[blue, align=center] at (-1.3,3.2) {Vehicle A\\route};
+
+    \draw[-{Latex[length=3mm]}, very thick, red] (4.7,3.5) -- (3.5,3.5) -- (0.5,2.8) -- (0.5,1.8) -- (0.5,-0.4);
+    \node[red, align=center] at (5.3,3.5) {Vehicle B\\route};
+
+    \node[align=center] at (2,-0.7) {A route maps to a zone sequence.\\Reservations must not overlap in the same zone and time slot.};
+\end{tikzpicture}
+\caption{Example critical-zone abstraction. The final zone layout can be adjusted to match our intersection geometry.}
+\end{figure}
+
+\section{Vehicle Arrival and Speed Control Assumption}
+To keep the model understandable, we assume each head-of-line vehicle enters the control zone at a fixed distance with a known starting speed. This makes arrival-time prediction simple enough for a timed automata model.
+
+Let:
+\begin{itemize}
+    \item $D$ be the fixed distance from the detection line to the first critical-zone entry line,
+    \item $v_0$ be the starting speed when detected,
+    \item $v_{max} = 2v_0$ be the maximum allowed speed,
+    \item $v_{min}$ be the minimum smooth speed before the vehicle must stop.
+\end{itemize}
+
+The controller can compute the reachable arrival window:
+\[
+T_{earliest} = \frac{D}{v_{max}}, \qquad
+T_{normal} = \frac{D}{v_0}, \qquad
+T_{latest} = \frac{D}{v_{min}}.
+\]
+
+The controller searches for the earliest non-conflicting critical-zone schedule between $T_{earliest}$ and $T_{latest}$. If no schedule exists within this window, the vehicle should stop before entering the intersection.
+
+\section{Time-Slot Reservation Concept}
+Each vehicle receives a schedule for its required zone sequence. A vehicle does not need all zones at the same instant. It only needs each zone during the specific interval in which it passes through that zone.
+
+\begin{figure}[h!]
+\centering
+\begin{tabular}{c|cccccc}
+\toprule
+\textbf{Zone} & \textbf{t=10} & \textbf{t=11} & \textbf{t=12} & \textbf{t=13} & \textbf{t=14} & \textbf{t=15} \\
+\midrule
+CZ1 & Car A & -- & Car C & -- & -- & -- \\
+CZ2 & -- & Car B & -- & Car C & -- & -- \\
+CZ3 & -- & Car A & -- & -- & Car D & -- \\
+CZ4 & Car B & -- & -- & Car D & -- & -- \\
+\bottomrule
+\end{tabular}
+\caption{Example reservation table. A zone may be used by only one vehicle in each time slot.}
+\end{figure}
+
+\section{Scheduling and Priority Policy}
+Only the first vehicle in each incoming lane is active. Since there are four incoming lanes, the controller compares at most four active vehicles at a time. Vehicles behind the first vehicle in a lane cannot request access before the lane leader has moved.
+
+The controller should use a simple and explainable priority policy:
+\begin{enumerate}
+    \item Emergency vehicles have highest priority.
+    \item Normal vehicles are prioritized by smallest slack time.
+    \item If slack is similar, the vehicle with longer waiting time has priority.
+    \item If still equal, use FIFO order.
+    \item Non-conflicting vehicles may be scheduled together to improve throughput.
+\end{enumerate}
+
+Slack time can be understood as:
+\[
+\text{slack} = T_{latest} - T_{assigned\_entry}.
+\]
+A small slack means the vehicle is close to the point where it can no longer cross smoothly without stopping. However, priority never overrides safety. A vehicle may only receive a slot if its required critical zones are free during the assigned intervals.
+
+\section{Controller Algorithm}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[
+    node distance=0.7cm,
+    step/.style={draw, rounded corners, minimum width=7.8cm, minimum height=0.75cm, align=center, fill=blue!8},
+    decision/.style={draw, diamond, aspect=2.4, minimum width=3.2cm, align=center, fill=yellow!15},
+    arrow/.style={-{Latex[length=3mm]}, thick}
+]
+\node[step] (s1) {1. Head-of-line vehicle enters control zone};
+\node[step, below=of s1] (s2) {2. Vehicle sends intent, lane, speed and distance};
+\node[step, below=of s2] (s3) {3. Controller calculates arrival window};
+\node[step, below=of s3] (s4) {4. Controller maps route to critical-zone sequence};
+\node[step, below=of s4] (s5) {5. Search reservation table for earliest safe zone schedule};
+\node[decision, below=0.9cm of s5] (d1) {Schedule feasible?};
+\node[step, below left=0.8cm and 0.8cm of d1] (yes) {Reserve slots and send speed command};
+\node[step, below right=0.8cm and 0.8cm of d1] (no) {Command stop before intersection};
+\node[step, below=1.2cm of yes] (cross) {Vehicle follows schedule and enters zones only when reserved};
+\node[step, below=of cross] (release) {Vehicle exits and controller releases zones};
+
+\draw[arrow] (s1) -- (s2);
+\draw[arrow] (s2) -- (s3);
+\draw[arrow] (s3) -- (s4);
+\draw[arrow] (s4) -- (s5);
+\draw[arrow] (s5) -- (d1);
+\draw[arrow] (d1) -- node[left] {yes} (yes);
+\draw[arrow] (d1) -- node[right] {no} (no);
+\draw[arrow] (yes) -- (cross);
+\draw[arrow] (cross) -- (release);
+\end{tikzpicture}
+\caption{Proposed controller activity flow.}
+\end{figure}
+
+\section{Communication Roles: V2I and V2V}
+V2I is the main scheduling communication path. Vehicles send requests to the controller, and the controller sends schedules back to the vehicles. V2V is not the main scheduler; it supports safety awareness.
+
+\begin{center}
+\begin{tabular}{p{0.22\linewidth}p{0.68\linewidth}}
+\toprule
+\textbf{Communication} & \textbf{Role in our model} \\
+\midrule
+V2I & Vehicle sends route intent, speed, position and lane to the controller. Controller returns zone schedule and speed command. \\
+V2V & Vehicle broadcasts intent, emergency state or warning information to nearby vehicles for awareness and fail-safe behavior. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Updated Requirement Set}
+\begin{longtable}{p{0.13\linewidth}p{0.75\linewidth}}
+\toprule
+\textbf{ID} & \textbf{Requirement} \\
+\midrule
+REQ-1 & The system shall detect vehicles before they enter the intersection. \\
+REQ-2 & Only the head-of-line vehicle in each incoming lane may request access to the intersection. \\
+REQ-3 & A vehicle shall declare its route intent before reaching the critical zones. \\
+REQ-4 & The controller shall map each vehicle route to a sequence of required critical zones. \\
+REQ-5 & The controller shall calculate a reachable arrival window using fixed distance, starting speed, maximum speed and minimum smooth speed. \\
+REQ-6 & The controller shall assign non-overlapping time slots for each required critical zone. \\
+REQ-7 & A vehicle may enter a critical zone only during its assigned reservation interval. \\
+REQ-8 & No two vehicles may reserve or occupy the same critical zone during overlapping time intervals. \\
+REQ-9 & Vehicles with non-conflicting critical-zone schedules may cross simultaneously. \\
+REQ-10 & The controller shall use speed commands to help vehicles reach their assigned entry time smoothly. \\
+REQ-11 & The controller shall prioritize vehicles using emergency status, slack time, waiting time and FIFO order. \\
+REQ-12 & If no feasible smooth crossing schedule exists, the vehicle shall stop before the first critical zone. \\
+REQ-13 & The UPPAAL model shall verify collision freedom, reservation validity, deadlock freedom and relevant timing constraints. \\
+\bottomrule
+\end{longtable}
+
+\section{Suggested UML Updates}
+\subsection{Use-Case Diagram}
+The updated use-case diagram should include the following use cases:
+\begin{itemize}
+    \item Detect approaching vehicle
+    \item Declare vehicle intent
+    \item Calculate arrival window
+    \item Map route to critical zones
+    \item Reserve critical-zone time slots
+    \item Send speed command
+    \item Enter critical zone according to schedule
+    \item Stop before intersection if no feasible slot exists
+    \item Broadcast intent or emergency state through V2V
+\end{itemize}
+
+\subsection{Activity Diagram}
+The activity diagram should follow the controller algorithm shown in Figure 4. The main decision point should be: \textit{Is a non-conflicting and reachable schedule available?}
+
+\subsection{Sequence Diagram}
+The updated sequence diagram should include these lifelines:
+\begin{itemize}
+    \item Vehicle
+    \item Vehicle local controller
+    \item Intersection controller
+    \item Reservation table
+    \item Critical zones
+    \item Other vehicles for V2V awareness
+\end{itemize}
+
+Important messages:
+\begin{itemize}
+    \item Vehicle $\rightarrow$ Controller: request(route, speed, distance, lane)
+    \item Controller $\rightarrow$ Reservation table: checkAvailable(routeZones, arrivalWindow)
+    \item Reservation table $\rightarrow$ Controller: earliest feasible schedule
+    \item Controller $\rightarrow$ Vehicle: schedule(zoneTimes, speedCommand)
+    \item Vehicle $\rightarrow$ Critical zone: enter only if reservation is valid
+    \item Vehicle $\rightarrow$ Controller: zone exited / crossing complete
+\end{itemize}
+
+\section{UPPAAL Modelling Plan}
+UPPAAL should model a network of timed automata. The first improved version should stay abstract and verifiable instead of modelling full vehicle physics.
+
+\subsection{Templates}
+\begin{itemize}
+    \item \textbf{Vehicle template:} Idle, Detected, Requesting, ControlledApproach, WaitingBeforeEntry, InCriticalZone, Exited.
+    \item \textbf{Controller template:} ReceiveRequest, CalculateWindow, MapRoute, FindSlot, ReserveSlots, SendCommand, EmergencyMode.
+    \item \textbf{Reservation table logic:} Abstract arrays storing zone ownership per time slot.
+    \item \textbf{Optional emergency template:} Creates emergency request and override condition.
+\end{itemize}
+
+\subsection{Discrete Speed Modes}
+Instead of continuous acceleration, use discrete speed modes:
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Mode} & \textbf{Meaning} \\
+\midrule
+FAST & Reach first critical zone at earliest arrival time. \\
+NORMAL & Reach first critical zone at normal arrival time. \\
+SLOW & Reach first critical zone near latest smooth arrival time. \\
+STOP & Stop before the first critical zone if no feasible slot exists. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Properties to Verify}
+\begin{itemize}
+    \item No two vehicles occupy the same critical zone at the same time.
+    \item A vehicle enters a critical zone only if it has a valid reservation.
+    \item The system is deadlock-free.
+    \item Emergency priority does not create unsafe conflicts.
+    \item A vehicle that cannot be scheduled smoothly stops before the intersection.
+\end{itemize}
+
+Example UPPAAL query ideas:
+\begin{verbatim}
+A[] not deadlock
+A[] no_two_vehicles_same_zone
+A[] vehicle_in_zone imply reservation_valid
+A[] emergency_active imply no_conflicting_normal_vehicle_enters
+\end{verbatim}
+
+\section{Workload Split}
+\begin{center}
+\begin{tabular}{p{0.18\linewidth}p{0.32\linewidth}p{0.36\linewidth}}
+\toprule
+\textbf{Member} & \textbf{Responsibility} & \textbf{Output} \\
+\midrule
+Member 1 & Requirements and terminology & Updated requirement diagram, requirement table, glossary. \\
+Member 2 & UML behavior diagrams & Updated use-case, activity and sequence diagrams. \\
+Member 3 & UPPAAL model & Timed automata templates, variables, clocks and verification queries. \\
+Member 4 & Scheduling logic and research & Priority policy, time-slot algorithm, related work notes and report text. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Consistency Checklist}
+Before submitting updated work, check that all diagrams and text use the same concepts:
+\begin{itemize}
+    \item Are we using ``critical zone'' consistently instead of vague ``intersection area''?
+    \item Does every route map to a sequence of critical zones?
+    \item Does the controller assign time slots, not just permission?
+    \item Does speed control happen before the first critical zone?
+    \item Is stopping only allowed before the intersection, not inside a critical zone?
+    \item Is V2I the main scheduling path and V2V the supporting safety path?
+    \item Are priority rules safety-preserving and deadline-aware?
+    \item Does the UPPAAL model verify the same requirements shown in the diagrams?
+\end{itemize}
+
+\section{Related Work to Add to Zotero / BibTeX}
+The following papers are useful starting points for the report and final justification:
+\begin{itemize}
+    \item Dresner and Stone introduced reservation-based autonomous intersection management using an intersection manager and vehicle requests.
+    \item Miculescu and Karaman connect autonomous intersection coordination with polling and queueing ideas, including speed adjustment and safety guarantees.
+    \item Hu, Smith and Goldstein discuss schedule-driven intersection control where approaching vehicle arrival times can be adjusted through velocity control.
+\end{itemize}
+
+\begin{thebibliography}{9}
+\bibitem{dresner2004reservation}
+K. Dresner and P. Stone, ``Multiagent Traffic Management: A Reservation-Based Intersection Control Mechanism,'' AAMAS, 2004.
+
+\bibitem{dresner2008multiagent}
+K. Dresner and P. Stone, ``A Multiagent Approach to Autonomous Intersection Management,'' Journal of Artificial Intelligence Research, vol. 31, pp. 591--656, 2008.
+
+\bibitem{miculescu2016polling}
+D. Miculescu and S. Karaman, ``Polling-systems-based Autonomous Vehicle Coordination in Traffic Intersections with No Traffic Signals,'' arXiv:1607.07896, 2016.
+
+\bibitem{hu2019schedule}
+H.-C. Hu, S. F. Smith and R. Goldstein, ``Cooperative Schedule-Driven Intersection Control with Connected and Autonomous Vehicles,'' IEEE/RSJ International Conference on Intelligent Robots and Systems, 2019.
+\end{thebibliography}
+
+\section*{Proposed Team Decision}
+The team should agree that our improved model is a critical-zone time-slot reservation system with speed-controlled arrival. This gives us a clear structure for requirements, UML diagrams, UPPAAL verification and implementation mapping. It also gives us a strong explanation of why multiple vehicles can cross at the same time while still guaranteeing safety.
+
+\end{document}
