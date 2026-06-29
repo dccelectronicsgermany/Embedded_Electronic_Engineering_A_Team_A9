@@ -1,0 +1,553 @@
+# Updated Project Concept: Autonomous Intersection Scheduling with Critical Zones
+
+## 1. Main Idea
+
+We should model the autonomous intersection as a **time-based resource scheduling system**.
+
+The intersection is divided into smaller **critical zones**. These zones are the shared resources. Vehicles are treated like processes/tasks that need to reserve specific resources before they can pass through the intersection.
+
+A vehicle does not simply receive “permission to cross.” Instead, it receives a **time-based reservation** for every critical zone it needs.
+
+Core idea:
+
+> A vehicle may enter a critical zone only during its assigned time slot, and no two vehicles may reserve or occupy the same critical zone at the same time.
+
+This allows multiple vehicles to cross simultaneously if their critical-zone reservations do not conflict.
+
+---
+
+## 2. System Boundary
+
+Vehicles are generated or detected when they enter the scheduling range.
+
+When a vehicle appears, it must immediately receive one of two outcomes:
+
+1. **Scheduled successfully**
+2. **Marked as unable to schedule**, with a reason for failure
+
+There should be no vehicle inside the active simulation/control range without a schedule.
+
+---
+
+## 3. Directions and Critical Zone Naming
+
+We will use four incoming directions:
+
+* **DN** = vehicle comes from North
+* **DE** = vehicle comes from East
+* **DS** = vehicle comes from South
+* **DW** = vehicle comes from West
+
+Each vehicle has:
+
+* an origin direction
+* a destination direction
+* a timestamp
+* a unique vehicle ID
+
+Example:
+
+```text
+origin = DN
+destination = DS
+```
+
+This means the vehicle comes from the north and exits toward the south.
+
+For critical zones, we use matrix-style naming:
+
+```text
+CZ0 | CZ1
+----+----
+CZ2 | CZ3
+```
+
+The critical zones are not named after roads. Roads and critical zones are separate concepts.
+
+---
+
+## 4. Route-to-Critical-Zone Mapping
+
+We should use a fixed lookup table.
+
+There are only:
+
+```text
+4 origins × 3 possible destinations = 12 possible routes
+```
+
+The lookup table maps each origin/destination pair to the required critical-zone sequence.
+
+Example format:
+
+```text
+DN → DS = CZ1 → CZ3
+DN → DE = CZ1
+DN → DW = CZ1 → CZ0 → CZ2
+```
+
+The exact table still needs to be agreed on after we draw the intersection geometry clearly.
+
+Using a lookup table is simpler and more deterministic than calculating left/right/straight dynamically.
+
+---
+
+## 5. Vehicle Queues and Overtaking
+
+Each direction has its own FIFO queue.
+
+Vehicles are not allowed to overtake.
+
+This means:
+
+```text
+DN vehicle 1 must be scheduled before DN vehicle 2.
+DE vehicle 1 must be scheduled before DE vehicle 2.
+```
+
+This keeps the system realistic because each direction has one incoming lane.
+
+Because overtaking is not allowed, the baseline design should not use speed-up. Vehicles can only maintain their starting speed or slow down.
+
+---
+
+## 6. Speed Assumptions
+
+For the baseline system:
+
+* No speed-up
+* No overtaking
+* Vehicles may maintain speed or slow down
+* Each vehicle has a minimum allowed speed
+
+The minimum speed is important because it defines the latest time the vehicle can arrive at the first critical zone without stopping.
+
+For each vehicle:
+
+```text
+earliest arrival = timestamp + distance / starting_speed
+
+latest arrival = timestamp + distance / minimum_speed
+```
+
+The controller searches for a valid reservation only within this feasible arrival window.
+
+Example:
+
+```text
+distance = 60 m
+starting speed = 10 m/s
+minimum speed = 5 m/s
+
+earliest arrival = 6 s
+latest arrival = 12 s
+```
+
+So the controller must schedule the vehicle to enter the first critical zone between 6 s and 12 s after detection.
+
+---
+
+## 7. Scheduling Algorithm
+
+When a vehicle appears:
+
+1. Assign vehicle ID.
+2. Store timestamp.
+3. Store origin and destination.
+4. Use the route lookup table to find the required critical-zone sequence.
+5. Calculate earliest and latest feasible arrival time.
+6. Search the reservation timeline inside this time window.
+7. Check whether the required critical zones are free in sequence.
+8. If a valid sequence exists, reserve the time slots.
+9. If no valid sequence exists, mark the vehicle as unable to schedule and store the reason.
+
+The controller does not tell the vehicle directly to “speed up” or “slow down.”
+Instead, the controller sends the required arrival time and critical-zone schedule. The vehicle locally calculates the speed needed to meet that schedule.
+
+---
+
+## 8. Reservation Timeline
+
+The controller maintains a reservation timeline.
+
+Example:
+
+```text
+Time slot | CZ0   | CZ1   | CZ2   | CZ3
+-----------------------------------------
+10–11     | Car A | Free  | Free  | Car B
+11–12     | Free  | Car A | Car C | Free
+12–13     | Free  | Free  | Car A | Car C
+```
+
+A vehicle may enter a critical zone only if:
+
+```text
+current time is inside its assigned slot
+AND
+the critical zone is reserved for that vehicle
+AND
+no other vehicle occupies that critical zone
+```
+
+---
+
+## 9. Priority and Slack Time
+
+We want vehicles to move smoothly and avoid being forgotten.
+
+For this, we use **slack time**.
+
+Slack means how much time is left before the vehicle can no longer slow down enough to reach a valid slot without stopping.
+
+Simple form:
+
+```text
+slack = latest arrival time - proposed entry time
+```
+
+Small slack means the vehicle is urgent.
+
+Priority order:
+
+1. Preserve FIFO order inside each direction.
+2. Give priority to vehicles with smaller slack.
+3. If slack is equal, use earlier timestamp.
+4. If still equal, choose the route combination that gives better critical-zone usage.
+
+Priority never overrides safety.
+A vehicle with high priority still cannot enter an already reserved critical zone.
+
+---
+
+## 10. Failure Reasons
+
+If a vehicle cannot be scheduled, we should record why.
+
+Possible failure reasons:
+
+```text
+FAIL_INVALID_ROUTE
+Origin and destination are the same or not in the route table.
+
+FAIL_FIFO_ORDER
+Scheduling this vehicle would violate lane order.
+
+FAIL_NO_SLOT
+No non-conflicting critical-zone sequence exists in the feasible arrival window.
+
+FAIL_TOO_LATE
+The first available slot is after the vehicle’s latest no-stop arrival time.
+
+FAIL_CONFLICT
+The required critical zones are already reserved by other vehicles.
+```
+
+This will help us evaluate the system instead of only saying “it failed.”
+
+---
+
+## 11. Random Vehicle Generation
+
+For simulation, vehicles can be generated randomly.
+
+Each generated vehicle gets:
+
+* unique vehicle ID
+* timestamp
+* random origin direction
+* random destination direction
+* starting speed
+* route-to-zone sequence from the lookup table
+
+We can test the system by changing the spawn interval:
+
+```text
+Spawn every 10 s
+Spawn every 5 s
+Spawn every 2 s
+Spawn every 1 s
+```
+
+This allows us to see the capacity limit of the system.
+
+Important metrics:
+
+* number of vehicles generated
+* number of vehicles scheduled successfully
+* number of scheduling failures
+* average delay
+* critical-zone utilization
+* maximum lane queue length
+* common failure reason
+
+---
+
+## 12. Baseline and Optimization Plan
+
+### Phase 1: Baseline
+
+Use the simplest working design:
+
+* random vehicle generation
+* FIFO queues per direction
+* no overtaking
+* no speed-up
+* route-to-zone lookup table
+* critical-zone reservation timeline
+* slack-time priority
+* immediate scheduling when vehicle appears
+
+### Phase 2: Parameter Testing
+
+Experiment with:
+
+* minimum speed
+* vehicle spawn frequency
+* distance from intersection where vehicle is detected
+* time slot length
+
+This shows where the system reaches its limit.
+
+### Phase 3: Optional Optimization
+
+Only if time allows:
+
+* allow speed-up within a maximum speed limit
+* compare whether this improves throughput
+* keep it as an optimization, not the core design
+
+---
+
+## 13. V2I and V2V
+
+The main scheduling communication is between:
+
+```text
+Vehicle ↔ Intersection Controller
+```
+
+This is V2I.
+
+The controller is the authority for reservations.
+
+V2V can be used only as redundancy or awareness:
+
+```text
+Vehicle broadcasts:
+- route intent
+- entering critical zone
+- leaving critical zone
+```
+
+But V2V should not be the main scheduler, otherwise the model becomes too complex.
+
+---
+
+## 14. Roadside Unit
+
+We do not need to model a separate Roadside Unit.
+
+For our abstraction, the communication function is included inside the **Intersection Controller**.
+
+So our main components are:
+
+```text
+Vehicle
+Intersection Controller
+Critical Zones
+Reservation Timeline
+```
+
+---
+
+## 15. UPPAAL Model
+
+UPPAAL should model the system as timed automata.
+
+Main automata:
+
+```text
+Vehicle automaton
+Intersection Controller automaton
+Critical Zone / Reservation logic
+```
+
+Vehicle states could be:
+
+```text
+Generated
+RequestingSchedule
+Scheduled
+Approaching
+InCriticalZone
+Exited
+UnableToSchedule
+```
+
+Controller states could be:
+
+```text
+Idle
+ReceiveRequest
+MapRouteToZones
+CalculateArrivalWindow
+SearchReservationTimeline
+AssignReservation
+RejectRequest
+```
+
+Useful verification properties:
+
+```text
+A[] not deadlock
+
+A[] no two vehicles occupy the same critical zone
+
+A[] vehicle enters critical zone imply reservation is valid
+
+A[] FIFO order is preserved per direction
+
+A[] scheduled vehicle stays within assigned time window
+```
+
+UPPAAL needs bounded systems, so the first model can use a fixed maximum number of generated vehicles. The software simulation can later use more vehicles and random generation.
+
+---
+
+## 16. HW/SW Co-Design
+
+The software should handle the flexible scheduling logic.
+
+Software / FreeRTOS:
+
+```text
+vehicle generation
+vehicle queues
+timestamp handling
+route lookup table
+slack calculation
+reservation timeline search
+time-slot assignment
+communication logic
+```
+
+Hardware / VHDL:
+
+```text
+critical-zone conflict checker
+reservation validity checker
+zone occupancy monitor
+```
+
+A simple VHDL module can check:
+
+```text
+requested_zones AND reserved_zones
+```
+
+If the result is zero, there is no conflict.
+
+Example:
+
+```text
+requested_zones = 0101
+reserved_zones  = 0010
+AND result       = 0000
+
+No conflict.
+```
+
+If the result is non-zero, the requested route conflicts with an already reserved critical zone.
+
+This is a good HW/SW split because software handles scheduling and hardware handles deterministic safety checks.
+
+---
+
+## 17. What We Need to Update Now
+
+We should update all diagrams using the same wording.
+
+### Requirements Diagram
+
+Add requirements for:
+
+* direction queues
+* route-to-zone lookup table
+* reservation timeline
+* critical-zone time slots
+* minimum speed
+* slack-time priority
+* scheduling failure reasons
+* no overtaking
+* no speed-up baseline
+* UPPAAL verification
+* HW/SW conflict checker
+
+### Use Case Diagram
+
+Main use cases:
+
+* Generate / detect vehicle
+* Receive origin and destination
+* Assign timestamp and ID
+* Map route to critical zones
+* Calculate arrival window
+* Search reservation timeline
+* Assign reservation
+* Mark unable to schedule
+* Verify safety
+* Check hardware conflict
+
+### Activity Diagram
+
+Main flow:
+
+```text
+Vehicle generated
+↓
+Assign ID and timestamp
+↓
+Select origin and destination
+↓
+Look up critical-zone sequence
+↓
+Calculate arrival window
+↓
+Search reservation timeline
+↓
+Slot available?
+    yes → reserve slots → send schedule → vehicle crosses
+    no  → mark as unable to schedule → record failure reason
+```
+
+### Sequence Diagram
+
+Main lifelines:
+
+```text
+Vehicle
+Intersection Controller
+Reservation Timeline
+Critical Zone Checker
+Critical Zones
+```
+
+Main messages:
+
+```text
+Vehicle → Controller: request(origin, destination, timestamp)
+Controller → Controller: lookup route zones
+Controller → Reservation Timeline: check available time slots
+Reservation Timeline → Controller: available / unavailable
+Controller → Critical Zone Checker: validate conflict
+Controller → Vehicle: schedule or failure
+Vehicle → Critical Zones: enter during assigned slot
+Vehicle → Controller: exited
+```
+
+---
+
+## 18. Final Frozen Design Statement
+
+The system will be modeled as a reservation-based autonomous intersection. Vehicles are generated with a random origin and destination and are immediately scheduled when they enter the system range. Each route is mapped using a lookup table to a sequence of critical zones. The controller searches the reservation timeline within the vehicle’s feasible arrival window and assigns the earliest non-conflicting time-slot sequence. Vehicles are not allowed to overtake and are not sped up in the baseline model; they may only maintain speed or slow down to meet their assigned schedule. If no feasible schedule exists, the vehicle is marked as unable to schedule and the failure reason is recorded. Software handles scheduling, while hardware is used for deterministic conflict checking.
