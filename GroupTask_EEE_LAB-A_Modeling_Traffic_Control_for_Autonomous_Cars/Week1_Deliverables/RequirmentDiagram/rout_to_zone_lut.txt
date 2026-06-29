@@ -1,0 +1,37 @@
+@startuml
+title Route-to-Zone Lookup Table - Critical-Zone Reservation Model
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam titleFontSize 24
+skinparam titleFontStyle bold
+
+skinparam rectangle {
+    BackgroundColor white
+    BorderColor black
+    BorderThickness 2
+    RoundCorner 0
+    FontColor black
+}
+
+skinparam ArrowColor black
+skinparam ArrowThickness 2
+
+rectangle "<<lookupTable>>\n<b>Route-to-Zone Lookup Table\n\nThe controller uses this table to convert\neach origin-destination request into an ordered\ncritical-zone sequence." as LUT
+
+rectangle "<<routes from DN>>\n<b>Origin DN\n\nDN -> DE : [to be defined]\nDN -> DS : [to be defined]\nDN -> DW : [to be defined]" as DN
+
+rectangle "<<routes from DE>>\n<b>Origin DE\n\nDE -> DN : [to be defined]\nDE -> DS : [to be defined]\nDE -> DW : [to be defined]" as DE
+
+rectangle "<<routes from DS>>\n<b>Origin DS\n\nDS -> DN : [to be defined]\nDS -> DE : [to be defined]\nDS -> DW : [to be defined]" as DS
+
+rectangle "<<routes from DW>>\n<b>Origin DW\n\nDW -> DN : [to be defined]\nDW -> DE : [to be defined]\nDW -> DS : [to be defined]" as DW
+
+LUT --> DN
+LUT --> DE
+LUT --> DS
+LUT --> DW
+
+@enduml

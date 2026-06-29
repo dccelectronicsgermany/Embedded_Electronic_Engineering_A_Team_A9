@@ -1,0 +1,43 @@
+@startuml
+title Critical-Zone Mapping Diagram - Autonomous Intersection Management System
+
+top to bottom direction
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam titleFontSize 24
+skinparam titleFontStyle bold
+skinparam linetype ortho
+
+skinparam rectangle {
+    BackgroundColor white
+    BorderColor black
+    BorderThickness 2
+    RoundCorner 0
+    FontColor black
+}
+
+skinparam ArrowColor black
+skinparam ArrowThickness 2
+
+rectangle "<<definition>>\n<b>Direction Naming\n\nDN = vehicle originates from North\nDE = vehicle originates from East\nDS = vehicle originates from South\nDW = vehicle originates from West" as DIR
+
+rectangle "<<definition>>\n<b>Critical-Zone Naming\n\nThe intersection is divided into four shared resources:\n\nCZ0    CZ1\nCZ2    CZ3\n\nMatrix convention: top-left to bottom-right." as CZ
+
+rectangle "<<definition>>\n<b>Vehicle Route Request\n\nEach vehicle declares:\n\nvehicle_id\ntimestamp\norigin direction\ndestination direction\n\nExample: DN -> DS" as REQUEST
+
+rectangle "<<requirement>>\n<b>Route-to-Zone Lookup Table\n\nThe controller shall use a fixed LUT to map each\norigin-destination pair to a critical-zone sequence.\n\nNo dynamic route calculation is required in the baseline model." as LUT
+
+rectangle "<<example>>\n<b>Route Mapping Examples\n\nDN -> DS  = straight crossing\nDN -> DE  = turn toward East\nDN -> DW  = turn toward West\n\nEach route is mapped to a predefined sequence\nof CZ0, CZ1, CZ2, CZ3." as EXAMPLE
+
+rectangle "<<output>>\n<b>Critical-Zone Sequence\n\nThe scheduler receives an ordered zone sequence.\n\nExample format:\nVehicle V3: CZ1 -> CZ3\n\nThe reservation scheduler then assigns time slots\nfor this sequence." as OUTPUT
+
+DIR --> REQUEST
+CZ --> LUT
+REQUEST --> LUT
+LUT --> OUTPUT
+LUT --> EXAMPLE
+
+@enduml

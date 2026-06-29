@@ -1,0 +1,57 @@
+@startuml
+title Detailed Requirement Diagram - Reservation Scheduling
+
+top to bottom direction
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam titleFontSize 24
+skinparam titleFontStyle bold
+skinparam linetype ortho
+
+skinparam rectangle {
+    BackgroundColor white
+    BorderColor black
+    BorderThickness 2
+    RoundCorner 0
+    FontColor black
+}
+
+skinparam ArrowColor black
+skinparam ArrowThickness 2
+
+rectangle "<<functionalRequirement>>\n<b>Reservation Scheduling\n\nid=\"REQ-03\"\ntext=\"The controller shall assign non-overlapping time-slot reservations for the critical zones required by each vehicle.\"" as REQ03
+
+rectangle "<<requirement>>\n<b>Vehicle Request Input\n\nid=\"REQ-03.1\"\ntext=\"The scheduler shall receive vehicle ID, timestamp, origin direction, and destination direction.\"" as REQ031
+
+rectangle "<<requirement>>\n<b>Route-to-Zone Lookup\n\nid=\"REQ-03.2\"\ntext=\"The scheduler shall convert each origin-destination pair into a critical-zone sequence.\"" as REQ032
+
+rectangle "<<requirement>>\n<b>Arrival Window\n\nid=\"REQ-03.3\"\ntext=\"The scheduler shall calculate earliest and latest feasible arrival times from speed and distance constraints.\"" as REQ033
+
+rectangle "<<requirement>>\n<b>Timeline Search\n\nid=\"REQ-03.4\"\ntext=\"The scheduler shall search the reservation timeline for the earliest non-conflicting zone sequence.\"" as REQ034
+
+rectangle "<<requirement>>\n<b>Priority and FIFO\n\nid=\"REQ-03.5\"\ntext=\"The scheduler shall preserve lane FIFO order and use slack time for scheduling urgency.\"" as REQ035
+
+rectangle "<<requirement>>\n<b>Reservation Result\n\nid=\"REQ-03.6\"\ntext=\"The scheduler shall either commit the reservation or mark the vehicle as unable to schedule.\"" as REQ036
+
+REQ03 --> REQ031
+REQ03 --> REQ032
+REQ03 --> REQ033
+
+REQ031 -[hidden]right- REQ032
+REQ032 -[hidden]right- REQ033
+
+REQ031 --> REQ034
+REQ032 --> REQ034
+REQ033 --> REQ034
+
+REQ034 --> REQ035
+REQ035 --> REQ036
+
+
+REQ034 -[hidden]right- REQ035
+REQ035 -[hidden]right- REQ036
+
+@enduml

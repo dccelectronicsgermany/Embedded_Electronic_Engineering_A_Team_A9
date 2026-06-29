@@ -1,0 +1,88 @@
+@startuml
+title Requirement Diagram - Autonomous Intersection Management System
+
+top to bottom direction
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam titleFontSize 24
+skinparam titleFontStyle bold
+skinparam linetype ortho
+
+skinparam rectangle {
+    BackgroundColor white
+    BorderColor black
+    BorderThickness 2
+    RoundCorner 0
+    FontColor black
+}
+
+skinparam ArrowColor black
+skinparam ArrowThickness 2
+
+rectangle "<<requirement>>\n<b>Autonomous Intersection\n <b>Management System\n\nid=\"REQ-00\"\ntext=\"The system shall allow autonomous vehicles \nto cross an intersection without \nstopping and without collision using \ntime-based critical-zone reservations.\"" as REQ00
+
+rectangle "<<functionalRequirement>>\n<b>Vehicle Request Handling\n\nid=\"REQ-01\"\ntext=\"The system shall identify \nevery vehicle entering the scheduling range \nand collect its route request data.\"" as REQ01
+
+rectangle "<<functionalRequirement>>\n<b>Critical-Zone Resource Model\n\nid=\"REQ-02\"\ntext=\"The system shall model the intersection \nas shared critical-zone resources that \nvehicles reserve before crossing.\"" as REQ02
+
+rectangle "<<functionalRequirement>>\n<b>Reservation Scheduling\n\nid=\"REQ-03\"\ntext=\"The system shall assign non-overlapping \ntime-slot reservations for the critical zones \nrequired by each vehicle.\"" as REQ03
+
+rectangle "<<constraintRequirement>>\n<b>Motion and Lane Constraints\n\nid=\"REQ-04\"\ntext=\"The system shall preserve \nlane order and support no-stop \ncrossing under the baseline \nmotion assumptions.\"" as REQ04
+
+rectangle "<<safetyRequirement>>\n<b>Safety and Verification\n\nid=\"REQ-05\"\ntext=\"The system shall guarantee \ncollision freedom, valid critical-zone entry, \nFIFO preservation, and deadlock freedom.\"" as REQ05
+
+rectangle "<<designRequirement>>\n<b>HW/SW Co-Design\n\nid=\"REQ-06\"\ntext=\"The implementation shall \ndivide scheduling and safety-checking \nfunctions between software and hardware.\"" as REQ06
+
+rectangle "<<requirement>>\n<b>Vehicle ID and Timestamp</b>" as REQ011
+rectangle "<<requirement>>\n<b>Origin and Destination\nDN, DE, DS, DW" as REQ012
+
+rectangle "<<requirement>>\n<b>Critical Zones\nCZ0, CZ1, CZ2, CZ3" as REQ021
+rectangle "<<requirement>>\n<b>Route-to-Zone\nLookup Table" as REQ022
+
+rectangle "<<requirement>>\n<b>Reservation Timeline</b>" as REQ031
+rectangle "<<requirement>>\n<b>Non-Overlapping\nTime Slots" as REQ032
+rectangle "<<requirement>>\n<b>Scheduling Failure\nClassification" as REQ033
+
+rectangle "<<requirement>>\n<b>No Overtaking</b>" as REQ041
+rectangle "<<requirement>>\n<b>Speed\nMaintain or\nSlow Down Only" as REQ042
+rectangle "<<requirement>>\n<b>Minimum Speed\nParameter" as REQ043
+
+rectangle "<<requirement>>\n<b>Critical-Zone\nMutual Exclusion" as REQ051
+rectangle "<<requirement>>\n<b>Valid Reservation\nBefore Entry" as REQ052
+rectangle "<<requirement>>\n<b>UPPAAL\nVerification" as REQ053
+
+rectangle "<<requirement>>\n<b>Software\nScheduling" as REQ061
+rectangle "<<requirement>>\n<b>Hardware Conflict\nChecking" as REQ062
+
+REQ00 --> REQ01
+REQ00 --> REQ02
+REQ00 --> REQ03
+REQ00 --> REQ04
+REQ00 --> REQ05
+REQ00 --> REQ06
+
+REQ01 --> REQ011
+REQ01 --> REQ012
+
+REQ02 --> REQ021
+REQ02 --> REQ022
+
+REQ03 --> REQ031
+REQ03 --> REQ032
+REQ03 --> REQ033
+
+REQ04 --> REQ041
+REQ04 --> REQ042
+REQ04 --> REQ043
+
+REQ05 --> REQ051
+REQ05 --> REQ052
+REQ05 --> REQ053
+
+REQ06 --> REQ061
+REQ06 --> REQ062
+
+@enduml
