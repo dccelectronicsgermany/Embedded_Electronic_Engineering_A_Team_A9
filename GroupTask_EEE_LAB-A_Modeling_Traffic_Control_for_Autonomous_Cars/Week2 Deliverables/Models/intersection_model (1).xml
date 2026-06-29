@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN'
+  'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+
+<declaration>
+// 0=North, 1=South, 2=East, 3=West
+const int N     = 4;
+const int QSIZE = N;   // queue size matches number of cars per direction
+
+typedef int[0, N-1]   dir_t;
+typedef int[0, QSIZE] qindex_t;
+
+// Channels
+chan request[N];
+chan release[N];
+
+// Per-direction queue counts
+qindex_t count_N = 0;
+qindex_t count_S = 0;
+qindex_t count_E = 0;
+qindex_t count_W = 0;
+
+// At line flags — true when car is waiting at intersection line
+bool at_line[4];
+
+// Shared state
+bool emergency_active = false;
+bool crossing_active  = false;
+dir_t selected_dir    = 0;
+
+// Enqueue per direction
+void enqueue_N() { if(count_N &lt; QSIZE) count_N++; }
+void enqueue_S() { if(count_S &lt; QSIZE) count_S++; }
+void enqueue_E() { if(count_E &lt; QSIZE) count_E++; }
+void enqueue_W() { if(count_W &lt; QSIZE) count_W++; }
+
+// Select: first car at line wins (UPPAAL interleaving handles ties)
+// Fallback: any direction with cars waiting
+void select_next() {
+    if(at_line[0] &amp;&amp; count_N &gt; 0){
+        selected_dir = 0; count_N--; at_line[0] = false;
+    } else if(at_line[1] &amp;&amp; count_S &gt; 0){
+        selected_dir = 1; count_S--; at_line[1] = false;
+    } else if(at_line[2] &amp;&amp; count_E &gt; 0){
+        selected_dir = 2; count_E--; at_line[2] = false;
+    } else if(at_line[3] &amp;&amp; count_W &gt; 0){
+        selected_dir = 3; count_W--; at_line[3] = false;
+    }
+}
+
+bool any_at_line() {
+    return (at_line[0] &amp;&amp; count_N &gt; 0) ||
+           (at_line[1] &amp;&amp; count_S &gt; 0) ||
+           (at_line[2] &amp;&amp; count_E &gt; 0) ||
+           (at_line[3] &amp;&amp; count_W &gt; 0);
+}
+</declaration>
+
+<!-- VEHICLE TEMPLATE -->
+<template>
+  <name>Vehicle</name>
+  <parameter>const dir_t id</parameter>
+  <declaration>clock c;</declaration>
+
+  <location id="id0" x="0" y="0">
+    <name>Idle</name>
+  </location>
+  <location id="id1" x="200" y="0">
+    <name>Approaching</name>
+  </location>
+  <location id="id2" x="400" y="0">
+    <name>Waiting</name>
+  </location>
+  <location id="id3" x="600" y="0">
+    <name>Crossing</name>
+    <label kind="invariant">c &lt;= 10</label>
+  </location>
+  <location id="id4" x="300" y="150">
+    <name>Halted</name>
+  </location>
+
+  <init ref="id0"/>
+
+  <!-- Idle → Approaching -->
+  <transition>
+    <source ref="id0"/>
+    <target ref="id1"/>
+    <label kind="guard">!emergency_active</label>
+    <label kind="assignment">c = 0</label>
+  </transition>
+
+  <!-- Approaching → Waiting: reach line, send request -->
+  <transition>
+    <source ref="id1"/>
+    <target ref="id2"/>
+    <label kind="synchronisation">request[id]!</label>
+    <label kind="assignment">at_line[id] = true, c = 0</label>
+  </transition>
+
+  <!-- Waiting → Crossing: receive release -->
+  <transition>
+    <source ref="id2"/>
+    <target ref="id3"/>
+    <label kind="synchronisation">release[id]?</label>
+    <label kind="assignment">c = 0</label>
+  </transition>
+
+  <!-- Crossing → Idle: done crossing -->
+  <transition>
+    <source ref="id3"/>
+    <target ref="id0"/>
+    <label kind="guard">c &gt;= 1</label>
+    <label kind="assignment">c = 0, crossing_active = false</label>
+  </transition>
+
+  <!-- Waiting → Halted: emergency -->
+  <transition>
+    <source ref="id2"/>
+    <target ref="id4"/>
+    <label kind="guard">emergency_active</label>
+    <label kind="assignment">at_line[id] = false</label>
+  </transition>
+
+  <!-- Halted → Idle: emergency cleared -->
+  <transition>
+    <source ref="id4"/>
+    <target ref="id0"/>
+    <label kind="guard">!emergency_active</label>
+    <label kind="assignment">c = 0</label>
+  </transition>
+
+</template>
+
+<!-- CONTROLLER TEMPLATE -->
+<template>
+  <name>Controller</name>
+  <declaration>clock t;</declaration>
+
+  <location id="c0" x="0" y="0">
+    <name>Idle</name>
+  </location>
+  <location id="c1" x="250" y="0">
+    <name>Accepting</name>
+    <label kind="invariant">t &lt;= 2</label>
+  </location>
+  <location id="c2" x="500" y="0">
+    <name>Selecting</name>
+    <label kind="invariant">t &lt;= 1</label>
+  </location>
+  <location id="c3" x="500" y="150">
+    <name>Releasing</name>
+    <label kind="invariant">t &lt;= 2</label>
+  </location>
+  <location id="c4" x="250" y="150">
+    <name>Emergency</name>
+  </location>
+
+  <init ref="c0"/>
+
+  <!-- Idle → Accepting: North -->
+  <transition>
+    <source ref="c0"/>
+    <target ref="c1"/>
+    <label kind="synchronisation">request[0]?</label>
+    <label kind="guard">count_N &lt; QSIZE &amp;&amp; !emergency_active</label>
+    <label kind="assignment">enqueue_N(), t = 0</label>
+  </transition>
+
+  <!-- Idle → Accepting: South -->
+  <transition>
+    <source ref="c0"/>
+    <target ref="c1"/>
+    <label kind="synchronisation">request[1]?</label>
+    <label kind="guard">count_S &lt; QSIZE &amp;&amp; !emergency_active</label>
+    <label kind="assignment">enqueue_S(), t = 0</label>
+  </transition>
+
+  <!-- Idle → Accepting: East -->
+  <transition>
+    <source ref="c0"/>
+    <target ref="c1"/>
+    <label kind="synchronisation">request[2]?</label>
+    <label kind="guard">count_E &lt; QSIZE &amp;&amp; !emergency_active</label>
+    <label kind="assignment">enqueue_E(), t = 0</label>
+  </transition>
+
+  <!-- Idle → Accepting: West -->
+  <transition>
+    <source ref="c0"/>
+    <target ref="c1"/>
+    <label kind="synchronisation">request[3]?</label>
+    <label kind="guard">count_W &lt; QSIZE &amp;&amp; !emergency_active</label>
+    <label kind="assignment">enqueue_W(), t = 0</label>
+  </transition>
+
+  <!-- Accepting → Selecting -->
+  <transition>
+    <source ref="c1"/>
+    <target ref="c2"/>
+    <label kind="guard">any_at_line() &amp;&amp; !crossing_active</label>
+    <label kind="assignment">select_next(), t = 0</label>
+  </transition>
+
+  <!-- Selecting → Releasing -->
+  <transition>
+    <source ref="c2"/>
+    <target ref="c3"/>
+    <label kind="assignment">t = 0</label>
+  </transition>
+
+  <!-- Releasing → Idle: North -->
+  <transition>
+    <source ref="c3"/>
+    <target ref="c0"/>
+    <label kind="synchronisation">release[0]!</label>
+    <label kind="guard">selected_dir == 0</label>
+    <label kind="assignment">crossing_active = true, t = 0</label>
+  </transition>
+
+  <!-- Releasing → Idle: South -->
+  <transition>
+    <source ref="c3"/>
+    <target ref="c0"/>
+    <label kind="synchronisation">release[1]!</label>
+    <label kind="guard">selected_dir == 1</label>
+    <label kind="assignment">crossing_active = true, t = 0</label>
+  </transition>
+
+  <!-- Releasing → Idle: East -->
+  <transition>
+    <source ref="c3"/>
+    <target ref="c0"/>
+    <label kind="synchronisation">release[2]!</label>
+    <label kind="guard">selected_dir == 2</label>
+    <label kind="assignment">crossing_active = true, t = 0</label>
+  </transition>
+
+  <!-- Releasing → Idle: West -->
+  <transition>
+    <source ref="c3"/>
+    <target ref="c0"/>
+    <label kind="synchronisation">release[3]!</label>
+    <label kind="guard">selected_dir == 3</label>
+    <label kind="assignment">crossing_active = true, t = 0</label>
+  </transition>
+
+  <!-- Idle → Emergency: only when no car crossing -->
+  <transition>
+    <source ref="c0"/>
+    <target ref="c4"/>
+    <label kind="guard">!crossing_active</label>
+    <label kind="assignment">emergency_active = true, t = 0</label>
+  </transition>
+
+  <!-- Emergency → Idle: cleared after 2 time units -->
+  <transition>
+    <source ref="c4"/>
+    <target ref="c0"/>
+    <label kind="guard">t &gt;= 2</label>
+    <label kind="assignment">emergency_active = false, t = 0</label>
+  </transition>
+
+</template>
+
+<system>
+north      = Vehicle(0);
+south      = Vehicle(1);
+east       = Vehicle(2);
+west       = Vehicle(3);
+controller = Controller();
+
+system north, south, east, west, controller;
+</system>
+
+<queries>
+
+  <query>
+    <formula>A[] count_N &lt;= QSIZE &amp;&amp; count_S &lt;= QSIZE &amp;&amp; count_E &lt;= QSIZE &amp;&amp; count_W &lt;= QSIZE</formula>
+    <comment>No queue overflows in any direction</comment>
+  </query>
+
+  <query>
+    <formula>A[] count_N &gt;= 0 &amp;&amp; count_S &gt;= 0 &amp;&amp; count_E &gt;= 0 &amp;&amp; count_W &gt;= 0</formula>
+    <comment>No queue underflows in any direction</comment>
+  </query>
+
+  <query>
+    <formula>A[] not deadlock</formula>
+    <comment>System is deadlock free</comment>
+  </query>
+
+  <query>
+    <formula>A[] not (north.Crossing and south.Crossing) and not (north.Crossing and east.Crossing) and not (north.Crossing and west.Crossing) and not (south.Crossing and east.Crossing) and not (south.Crossing and west.Crossing) and not (east.Crossing and west.Crossing)</formula>
+    <comment>Mutual exclusion: only one vehicle crosses at a time</comment>
+  </query>
+
+  <query>
+    <formula>A[] emergency_active imply (not north.Crossing and not south.Crossing and not east.Crossing and not west.Crossing)</formula>
+    <comment>During emergency no vehicle crosses</comment>
+  </query>
+
+</queries>
+
+</nta>

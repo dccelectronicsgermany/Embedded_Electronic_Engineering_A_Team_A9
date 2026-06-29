@@ -1,0 +1,393 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// ============================================================
+// Continuous-Flow Autonomous Intersection Management System
+// Critical-Zone Time-Slot Reservation Model
+// Author: Daniel Chidi Chimezie
+// Project: Autonomous Intersection Management
+//
+// Main modelling goals:
+// 1. Continuous traffic flow: no complete vehicle stop.
+// 2. Collision freedom: no two vehicles occupy the same critical zone.
+// 3. Reservation validity: vehicle enters a zone only with valid reservation.
+// 4. Emergency vehicle priority through dynamic rescheduling.
+// 5. Deadlock freedom.
+// ============================================================
+
+
+// =======================
+// 1. CONSTANTS
+// =======================
+
+const int N = 3;                 // number of vehicles in the model
+const int Z = 2;                 // number of critical zones
+const int NONE = -1;             // no owner for a critical zone
+
+const int MIN_SPEED = 1;         // lowest allowed moving speed
+const int NORMAL_SPEED = 2;      // default moving speed
+const int FAST_SPEED = 3;        // priority/emergency speed
+
+const int REQUEST_DELAY = 1;     // abstract time before request is made
+const int APPROACH_TIME = 1;     // abstract time from grant to zone entry
+const int CROSSING_TIME = 1;     // abstract time spent inside a critical zone
+
+
+// =======================
+// 2. CLOCKS
+// =======================
+
+clock t[N];                      // one local clock per vehicle
+
+
+// =======================
+// 3. VEHICLE DATA
+// =======================
+
+// Current abstract vehicle speed.
+// Important: speed must never be 0 in this continuous-flow model.
+int speed[N] = {NORMAL_SPEED, NORMAL_SPEED, NORMAL_SPEED};
+
+// Route abstraction:
+// routeZone[i] is the critical zone required by vehicle i.
+// Vehicle 0 and vehicle 1 both need CZ0.
+// Vehicle 2 needs CZ1.
+// This creates a useful conflict case for testing emergency priority.
+int routeZone[N] = {0, 0, 1};
+
+// Emergency setting:
+// Vehicle 1 is the emergency vehicle.
+bool isEmergency[N] = {false, true, false};
+
+
+// =======================
+// 4. RESERVATION STATE
+// =======================
+
+// zoneOwner[z] stores which vehicle currently owns critical zone z.
+// NONE means the zone is free.
+int zoneOwner[Z] = {NONE, NONE};
+
+// reservationValid[i] is true if vehicle i currently has a valid reservation.
+bool reservationValid[N] = {false, false, false};
+
+// inZone[i] is true if vehicle i is physically inside its critical zone.
+bool inZone[N] = {false, false, false};
+
+// crossed[i] is true after vehicle i has left the intersection.
+bool crossed[N] = {false, false, false};
+
+
+// =======================
+// 5. MONITORING FLAGS
+// =======================
+
+bool priorityGiven = false;             // true when emergency priority has been granted
+bool recalculationTriggered = false;    // true when a reservation/speed recalculation occurs
+bool conflictDetected = false;          // true if reservation conflict was detected
+
+
+// =======================
+// 6. SYNCHRONISATION CHANNELS
+// =======================
+
+chan request[N];        // vehicle requests reservation
+chan grant[N];          // controller grants reservation
+chan enterZone[N];      // vehicle enters critical zone
+chan leaveZone[N];      // vehicle leaves critical zone
+
+
+// =======================
+// 7. HELPER FUNCTIONS
+// =======================
+
+// Return true if vehicle i can reserve its required critical zone.
+bool canReserve(int i)
+{
+    int z = routeZone[i];
+
+    // Case 1: zone is free.
+    if (zoneOwner[z] == NONE)
+        return true;
+
+    // Case 2: vehicle already owns the zone.
+    if (zoneOwner[z] == i)
+        return true;
+
+    // Case 3: emergency vehicle may dynamically reschedule another vehicle,
+    // but only if the current owner is not already inside the critical zone.
+    if (isEmergency[i] &amp;&amp; !inZone[zoneOwner[z]])
+        return true;
+
+    return false;
+}
+
+
+// Assign reservation to vehicle i.
+void reserveFor(int i)
+{
+    int z = routeZone[i];
+
+    conflictDetected = false;
+
+    // Emergency dynamic rescheduling:
+    // If another vehicle owns this zone but is not yet inside it,
+    // its reservation is invalidated and it must request again.
+    // It is NOT stopped. Its speed becomes MIN_SPEED, meaning slow movement.
+    if (zoneOwner[z] != NONE &amp;&amp; zoneOwner[z] != i)
+    {
+        reservationValid[zoneOwner[z]] = false;
+        speed[zoneOwner[z]] = MIN_SPEED;
+        recalculationTriggered = true;
+        conflictDetected = true;
+    }
+
+    zoneOwner[z] = i;
+    reservationValid[i] = true;
+
+    if (isEmergency[i])
+    {
+        priorityGiven = true;
+        speed[i] = FAST_SPEED;
+    }
+    else
+    {
+        speed[i] = NORMAL_SPEED;
+    }
+}
+
+
+// Release the reservation of vehicle i after it exits the critical zone.
+void releaseFor(int i)
+{
+    int z = routeZone[i];
+
+    if (zoneOwner[z] == i)
+        zoneOwner[z] = NONE;
+
+    reservationValid[i] = false;
+    inZone[i] = false;
+    crossed[i] = true;
+    speed[i] = NORMAL_SPEED;
+}
+
+
+// Safety function:
+// Returns true when no two vehicles are inside the same critical zone.
+bool noCollision()
+{
+    return !(
+        (inZone[0] &amp;&amp; inZone[1] &amp;&amp; routeZone[0] == routeZone[1]) ||
+        (inZone[0] &amp;&amp; inZone[2] &amp;&amp; routeZone[0] == routeZone[2]) ||
+        (inZone[1] &amp;&amp; inZone[2] &amp;&amp; routeZone[1] == routeZone[2])
+    );
+}
+
+
+// Continuous-flow function:
+// Returns true when all vehicles have speed greater than zero.
+bool allSpeedPositive()
+{
+    return speed[0] &gt; 0 &amp;&amp; speed[1] &gt; 0 &amp;&amp; speed[2] &gt; 0;
+}
+
+
+// Reservation-validity function:
+// Returns true when every vehicle inside a zone has a valid reservation.
+bool reservationSafety()
+{
+    return
+        (!inZone[0] || reservationValid[0]) &amp;&amp;
+        (!inZone[1] || reservationValid[1]) &amp;&amp;
+        (!inZone[2] || reservationValid[2]);
+}
+
+
+// Liveness helper:
+// Returns true when every vehicle has crossed the intersection.
+bool allVehiclesCrossed()
+{
+    return crossed[0] &amp;&amp; crossed[1] &amp;&amp; crossed[2];
+}
+</declaration>
+	<template>
+		<name x="5" y="5">Vehicle</name>
+		<parameter>int id</parameter>
+		<declaration>// ============================================================
+// Vehicle template
+// Parameter: int id
+//
+// Vehicle states:
+// Idle -&gt; Requesting -&gt; MovingToZone -&gt; InCriticalZone -&gt; Exited
+//
+// Important:
+// There is deliberately no STOP state.
+// If a vehicle loses its reservation due to emergency priority,
+// it returns to Requesting while moving at MIN_SPEED.
+// ============================================================</declaration>
+		<location id="id0" x="-680" y="-120">
+			<name x="-700" y="-155">Idle</name>
+		</location>
+		<location id="id1" x="-440" y="-120">
+			<name x="-485" y="-155">Requesting</name>
+		</location>
+		<location id="id2" x="-160" y="-120">
+			<name x="-210" y="-155">MovingToZone</name>
+		</location>
+		<location id="id3" x="150" y="-120">
+			<name x="95" y="-155">InCriticalZone</name>
+		</location>
+		<location id="id4" x="430" y="-120">
+			<name x="405" y="-155">Exited</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id5">
+			<source ref="id0"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-620" y="-170">!crossed[id]</label>
+			<label kind="synchronisation" x="-610" y="-145">request[id]!</label>
+			<label kind="assignment" x="-610" y="-118">t[id] = 0</label>
+		</transition>
+		<transition id="id6">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="guard" x="-370" y="-145">reservationValid[id]</label>
+			<label kind="synchronisation" x="-370" y="-170">grant[id]?</label>
+			<label kind="assignment" x="-370" y="-118">t[id] = 0</label>
+		</transition>
+		<transition id="id7">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="guard" x="-80" y="-175">t[id] &gt;= APPROACH_TIME &amp;&amp; reservationValid[id]</label>
+			<label kind="synchronisation" x="-80" y="-150">enterZone[id]!</label>
+			<label kind="assignment" x="-80" y="-125">inZone[id] = true, t[id] = 0</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="guard" x="230" y="-175">t[id] &gt;= CROSSING_TIME</label>
+			<label kind="synchronisation" x="230" y="-150">leaveZone[id]!</label>
+			<label kind="assignment" x="230" y="-125">releaseFor(id)</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id2"/>
+			<target ref="id1"/>
+			<label kind="guard" x="-305" y="-15">!reservationValid[id] &amp;&amp; !crossed[id]</label>
+			<label kind="synchronisation" x="-305" y="10">request[id]!</label>
+			<label kind="assignment" x="-305" y="35">speed[id] = MIN_SPEED, t[id] = 0</label>
+			<nail x="-160" y="70"/>
+			<nail x="-440" y="70"/>
+		</transition>
+	</template>
+	<template>
+		<name x="5" y="5">Controller</name>
+		<declaration>// ============================================================
+// Controller template
+//
+// The controller receives reservation requests, checks whether the
+// requested critical zone can be reserved, assigns reservations,
+// and grants movement commands.
+//
+// Emergency vehicle priority:
+// If the requesting vehicle is emergency and the zone is owned by a
+// vehicle that is not yet inside the critical zone, the controller
+// dynamically reschedules the old owner.
+// ============================================================
+
+int pending = 0;</declaration>
+		<location id="id10" x="-410" y="130">
+			<name x="-460" y="95">WaitRequest</name>
+		</location>
+		<location id="id11" x="-70" y="130">
+			<name x="-130" y="95">CheckReservation</name>
+		</location>
+		<location id="id12" x="270" y="130">
+			<name x="210" y="95">GrantReservation</name>
+		</location>
+		<init ref="id10"/>
+		<transition id="id13">
+			<source ref="id10"/>
+			<target ref="id11"/>
+			<label kind="select" x="-330" y="80">i : int[0,N-1]</label>
+			<label kind="synchronisation" x="-330" y="105">request[i]?</label>
+			<label kind="assignment" x="-330" y="130">pending = i</label>
+		</transition>
+		<transition id="id14">
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="guard" x="15" y="80">canReserve(pending)</label>
+			<label kind="assignment" x="15" y="105">reserveFor(pending)</label>
+		</transition>
+		<transition id="id15">
+			<source ref="id12"/>
+			<target ref="id10"/>
+			<label kind="synchronisation" x="40" y="220">grant[pending]!</label>
+			<nail x="270" y="245"/>
+			<nail x="-410" y="245"/>
+		</transition>
+		<transition id="id16">
+			<source ref="id11"/>
+			<target ref="id11"/>
+			<label kind="guard" x="-95" y="220">!canReserve(pending)</label>
+			<label kind="assignment" x="-95" y="245">speed[pending] = MIN_SPEED, recalculationTriggered = true</label>
+			<nail x="-70" y="245"/>
+			<nail x="-10" y="245"/>
+		</transition>
+	</template>
+	<system>// ============================================================
+// System declarations
+// Paste this section into UPPAAL's "System declarations" field
+// if you are building the model manually.
+// ============================================================
+
+V0 = Vehicle(0);
+V1 = Vehicle(1);
+V2 = Vehicle(2);
+
+C = Controller();
+
+system V0, V1, V2, C;
+</system>
+	<queries>
+		<query>
+			<formula>A[] noCollision()</formula>
+			<comment>Safety: no two vehicles occupy the same critical zone at the same time.</comment>
+		</query>
+		<query>
+			<formula>A[] allSpeedPositive()</formula>
+			<comment>Continuous-flow rule: no vehicle has zero speed.</comment>
+		</query>
+		<query>
+			<formula>A[] reservationSafety()</formula>
+			<comment>Reservation validity: every vehicle inside a critical zone has a valid reservation.</comment>
+		</query>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment>Deadlock freedom.</comment>
+		</query>
+		<query>
+			<formula>A&lt;&gt; V0.Exited</formula>
+			<comment>Liveness: normal vehicle 0 can eventually cross the intersection.</comment>
+		</query>
+		<query>
+			<formula>A&lt;&gt; V1.Exited</formula>
+			<comment>Liveness: emergency vehicle 1 can eventually cross the intersection.</comment>
+		</query>
+		<query>
+			<formula>A&lt;&gt; V2.Exited</formula>
+			<comment>Liveness: normal vehicle 2 can eventually cross the intersection.</comment>
+		</query>
+		<query>
+			<formula>A&lt;&gt; priorityGiven</formula>
+			<comment>Emergency priority: the emergency-priority flag can eventually become true.</comment>
+		</query>
+		<query>
+			<formula>A&lt;&gt; allVehiclesCrossed()</formula>
+			<comment>System liveness: all vehicles can eventually leave the intersection.</comment>
+		</query>
+		<query>
+			<formula>A[] recalculationTriggered imply allSpeedPositive()</formula>
+			<comment>Even after dynamic rescheduling, vehicles continue moving and are not stopped.</comment>
+		</query>
+	</queries>
+</nta>

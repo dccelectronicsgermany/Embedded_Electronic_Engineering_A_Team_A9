@@ -1,0 +1,8 @@
+For any of the diagrams created:
+
+Create a .md or text file and paste the PlantUML code used to create the Diagram
+Always Update the source code for the diagram in the text file, when making changes to the diagram so that other people can easily edit it later if needed
+
+!IMPORTANT!  
+There should always be at least one text file for the PlantUML code and one file for the diagram itself
+You dont have to replace old diagrams, ust name the newer or latest ones as _v1 or _v2, etc. 
