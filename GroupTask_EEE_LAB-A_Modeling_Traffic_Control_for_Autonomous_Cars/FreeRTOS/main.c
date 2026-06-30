@@ -118,8 +118,6 @@ static void vArrivalTask(void *arg) {
 static void vControllerTask(void *arg) {
     (void)arg;
     printf("[CTRL]  Controller running.\n"); fflush(stdout);
-    int stoppedId[NUM_LANES];
-    for (int i = 0; i < NUM_LANES; i++) stoppedId[i] = -1;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(SIM_MS));
         gTick++;
@@ -169,10 +167,18 @@ static void vControllerTask(void *arg) {
                 char cz[24]; czLabel(&v, cz, sizeof cz);
                 printf("[SCHED]  Car#%-2d  %s  speed=%s\n", v.id, cz, SPEED_STR[v.speed]);
                 fflush(stdout);
-                stoppedId[lane] = -1; toCross[nCross++] = v;
-            } else if (stoppedId[lane] != (int)v.id) {
-                printf("[STOP]   Car#%-2d  no free slot in window -> waiting.\n", v.id);
-                fflush(stdout); stoppedId[lane] = (int)v.id;
+                toCross[nCross++] = v;
+            }  else {
+                Vehicle failed;
+
+                if (xQueueReceive(laneQ[lane], &failed, 0) == pdTRUE) {
+                    char cz[24];
+                    czLabel(&failed, cz, sizeof cz);
+
+                    printf("[FAIL]   Car#%-2d  %s  no valid reservation inside feasible arrival window.\n",
+                        failed.id, cz);
+                    fflush(stdout);
+                }
             }
         }
         xSemaphoreGive(xMutex);
