@@ -60,7 +60,7 @@ static void czLabel(const Vehicle *v, char *buf, size_t n) {
 
 static bool trySchedule(Vehicle *v, uint32_t *outEntry) {
     uint8_t zones[3] = { v->czA, v->czB, v->czC };
-    for (uint32_t t = gTick + T_EARLY; t <= gTick + T_LATE; t++) {
+    for (uint32_t t = gTick + T_NORMAL; t <= gTick + T_LATE; t++) {
         bool ok = true;
         uint32_t cur = t;
         for (int z = 0; z < 3 && ok; z++) {
@@ -161,9 +161,11 @@ static void vControllerTask(void *arg) {
                 Vehicle popped; xQueueReceive(laneQ[lane], &popped, 0);
                 v.entry = entry; v.approach = (uint8_t)(entry - gTick);
                 v.slack = (gTick + T_LATE) - entry;
-                if      (entry <= gTick + T_EARLY + 1) v.speed = SPEED_FAST;
-                else if (entry <= gTick + T_NORMAL)    v.speed = SPEED_NORMAL;
-                else                                   v.speed = SPEED_SLOW;
+                if (entry <= gTick + T_NORMAL) {
+                    v.speed = SPEED_NORMAL;
+                } else {
+                    v.speed = SPEED_SLOW;
+                }
                 char cz[24]; czLabel(&v, cz, sizeof cz);
                 printf("[SCHED]  Car#%-2d  %s  speed=%s\n", v.id, cz, SPEED_STR[v.speed]);
                 fflush(stdout);
