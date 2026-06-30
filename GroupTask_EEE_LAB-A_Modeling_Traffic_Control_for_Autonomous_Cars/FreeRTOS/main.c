@@ -16,11 +16,19 @@
 #define NO_VEH       -1
 #define T_EARLY       3      /* earliest arrival -> FAST   */
 #define T_NORMAL      6      /* normal arrival   -> NORMAL */
-#define T_LATE        10     /* latest arrival   -> SLOW   */
+#define T_LATE        12     /* latest arrival   -> SLOW   */
 #define SIM_MS        300    /* ms per tick */
 #define NUM_CROSSERS  8
 #define NO_CZ         255    /* zone slot unused */
 #define STATS_PRINT_EVERY 10   /* print statistics every 10 simulation ticks */
+#define SIM_END_TICK 150
+
+#define POLICY_FIFO              0
+#define POLICY_SHORTEST_ROUTE    1
+#define POLICY_LONGEST_ROUTE     2
+
+#define SCHED_POLICY POLICY_LONGEST_ROUTE
+#define ALLOW_SPEED_UP 0
 
 typedef enum { NORTH, SOUTH, EAST, WEST } Lane;
 typedef enum { STRAIGHT, TURN_RIGHT, TURN_LEFT } Intent;
@@ -54,6 +62,7 @@ static uint8_t  nextID = 0;
 static uint32_t totalDetected  = 0;
 static uint32_t totalScheduled = 0;
 static uint32_t totalFailed    = 0;
+static uint32_t totalCrossed   = 0;
 
 static FILE *statsFile = NULL;
 static unsigned long runId = 0;
@@ -65,6 +74,30 @@ static void czLabel(const Vehicle *v, char *buf, size_t n) {
     if      (v->czB == NO_CZ) snprintf(buf, n, "CZ%d only", v->czA+1);
     else if (v->czC == NO_CZ) snprintf(buf, n, "CZ%d->CZ%d", v->czA+1, v->czB+1);
     else                      snprintf(buf, n, "CZ%d->CZ%d->CZ%d", v->czA+1, v->czB+1, v->czC+1);
+}
+
+static uint8_t zoneCount(const Vehicle *v) {
+    if (v->czB == NO_CZ) return 1;
+    if (v->czC == NO_CZ) return 2;
+    return 3;
+}
+
+static bool hasHigherPriority(const Vehicle *candidate, const Vehicle *current) {
+    uint8_t candidateZones = zoneCount(candidate);
+    uint8_t currentZones   = zoneCount(current);
+
+#if SCHED_POLICY == POLICY_SHORTEST_ROUTE
+    if (candidateZones != currentZones) {
+        return candidateZones < currentZones;
+    }
+#elif SCHED_POLICY == POLICY_LONGEST_ROUTE
+    if (candidateZones != currentZones) {
+        return candidateZones > currentZones;
+    }
+#endif
+
+    /* FIFO tie-breaker */
+    return candidate->id < current->id;
 }
 
 static void initStatsFile(void) {
@@ -81,13 +114,14 @@ static void initStatsFile(void) {
     if (ftell(statsFile) == 0) {
         fprintf(statsFile,
                 "run_id,tick,T_NORMAL,T_LATE,NUM_CROSSERS,NUM_SLOTS,SIM_MS,"
-                "detected,scheduled,failed,success_percent,failure_percent\n");
+                "detected,scheduled,crossed,pending,failed,sched_success_percent,failure_percent\n");
         fflush(statsFile);
     }
 }
 
 static void printStats(void) {
     uint32_t resolved = totalScheduled + totalFailed;
+    uint32_t pending = totalScheduled - totalCrossed;
 
     uint32_t successRate = 0;
     uint32_t failureRate = 0;
@@ -97,18 +131,20 @@ static void printStats(void) {
         failureRate = (totalFailed * 100U) / resolved;
     }
 
-    printf("[STATS]  t=%-3lu  detected=%-3lu  scheduled=%-3lu  failed=%-3lu  success=%lu%%  failure=%lu%%\n",
-           (unsigned long)gTick,
-           (unsigned long)totalDetected,
-           (unsigned long)totalScheduled,
-           (unsigned long)totalFailed,
-           (unsigned long)successRate,
-           (unsigned long)failureRate);
-    fflush(stdout);
+    printf("[STATS]  t=%-3lu  detected=%-3lu  scheduled=%-3lu  crossed=%-3lu  pending=%-3lu  failed=%-3lu  sched_success=%lu%%  failure=%lu%%\n",
+        (unsigned long)gTick,
+        (unsigned long)totalDetected,
+        (unsigned long)totalScheduled,
+        (unsigned long)totalCrossed,
+        (unsigned long)pending,
+        (unsigned long)totalFailed,
+        (unsigned long)successRate,
+        (unsigned long)failureRate);
+    fflush(stdout); 
 
     if (statsFile != NULL) {
         fprintf(statsFile,
-                "%lu,%lu,%d,%d,%d,%d,%d,%lu,%lu,%lu,%lu,%lu\n",
+                "%lu,%lu,%d,%d,%d,%d,%d,%lu,%lu,%lu,%lu,%lu,%lu,%lu\n",
                 runId,
                 (unsigned long)gTick,
                 T_NORMAL,
@@ -118,6 +154,8 @@ static void printStats(void) {
                 SIM_MS,
                 (unsigned long)totalDetected,
                 (unsigned long)totalScheduled,
+                (unsigned long)totalCrossed,
+                (unsigned long)pending,
                 (unsigned long)totalFailed,
                 (unsigned long)successRate,
                 (unsigned long)failureRate);
@@ -198,7 +236,8 @@ static void vControllerTask(void *arg) {
         for (int i = 0; i < NUM_LANES; i++)
             hasCand[i] = (xQueuePeek(laneQ[i], &cands[i], 0) == pdTRUE);
 
-        int order[NUM_LANES] = { 0, 1, 2, 3 };     /* FIFO between lane heads */
+        int order[NUM_LANES] = { 0, 1, 2, 3 };
+
         for (int i = 0; i < NUM_LANES - 1; i++) {
             for (int j = i + 1; j < NUM_LANES; j++) {
                 int a = order[i];
@@ -208,7 +247,7 @@ static void vControllerTask(void *arg) {
                 if (!hasCand[a] && hasCand[b]) {
                     sw = true;
                 } else if (hasCand[a] && hasCand[b]) {
-                    if (cands[b].id < cands[a].id) {
+                    if (hasHigherPriority(&cands[b], &cands[a])) {
                         sw = true;
                     }
                 }
@@ -259,11 +298,31 @@ static void vControllerTask(void *arg) {
             printStats();
         }
 
+        if (gTick >= SIM_END_TICK) {
+            if ((gTick % STATS_PRINT_EVERY) != 0) {
+                printStats();
+            }
+
+            if (statsFile != NULL) {
+                fclose(statsFile);
+                statsFile = NULL;
+            }
+
+            xSemaphoreGive(xMutex);
+
+            printf("[DONE]   Simulation finished at t=%lu.\n", (unsigned long)gTick);
+            fflush(stdout);
+
+            exit(0);
+        }
+
         xSemaphoreGive(xMutex);
 
-        for (int i = 0; i < nCross; i++)
+        for (int i = 0; i < nCross; i++){
             xQueueSend(crossQ, &toCross[i], portMAX_DELAY);
+        }
     }
+    
 }
 
 /* crosser — independent concurrent vehicle journey (REQ-9,10) */
@@ -281,8 +340,11 @@ static void vCrosserTask(void *arg) {
         vTaskDelay(pdMS_TO_TICKS(crossTicks * SIM_MS));
         xSemaphoreTake(xMutex, portMAX_DELAY);
         releaseSlots(v.id);
+        totalCrossed++;
+
         printf("[EXIT]   Car#%-2d  crossed; zones released.\n", v.id);
-        fflush(stdout); xSemaphoreGive(xMutex);
+        fflush(stdout);
+        xSemaphoreGive(xMutex);
     }
 }
 
