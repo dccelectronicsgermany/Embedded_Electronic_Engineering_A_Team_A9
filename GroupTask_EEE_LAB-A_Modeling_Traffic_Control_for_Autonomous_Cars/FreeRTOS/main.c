@@ -55,6 +55,9 @@ static uint32_t totalDetected  = 0;
 static uint32_t totalScheduled = 0;
 static uint32_t totalFailed    = 0;
 
+static FILE *statsFile = NULL;
+static unsigned long runId = 0;
+
 static QueueHandle_t laneQ[NUM_LANES], crossQ;
 static SemaphoreHandle_t xMutex;
 
@@ -62,6 +65,25 @@ static void czLabel(const Vehicle *v, char *buf, size_t n) {
     if      (v->czB == NO_CZ) snprintf(buf, n, "CZ%d only", v->czA+1);
     else if (v->czC == NO_CZ) snprintf(buf, n, "CZ%d->CZ%d", v->czA+1, v->czB+1);
     else                      snprintf(buf, n, "CZ%d->CZ%d->CZ%d", v->czA+1, v->czB+1, v->czC+1);
+}
+
+static void initStatsFile(void) {
+    statsFile = fopen("simulation_results.csv", "a");
+
+    if (statsFile == NULL) {
+        printf("[WARN]   Could not open simulation_results.csv for writing.\n");
+        fflush(stdout);
+        return;
+    }
+
+    fseek(statsFile, 0, SEEK_END);
+
+    if (ftell(statsFile) == 0) {
+        fprintf(statsFile,
+                "run_id,tick,T_NORMAL,T_LATE,NUM_CROSSERS,NUM_SLOTS,SIM_MS,"
+                "detected,scheduled,failed,success_percent,failure_percent\n");
+        fflush(statsFile);
+    }
 }
 
 static void printStats(void) {
@@ -83,6 +105,24 @@ static void printStats(void) {
            (unsigned long)successRate,
            (unsigned long)failureRate);
     fflush(stdout);
+
+    if (statsFile != NULL) {
+        fprintf(statsFile,
+                "%lu,%lu,%d,%d,%d,%d,%d,%lu,%lu,%lu,%lu,%lu\n",
+                runId,
+                (unsigned long)gTick,
+                T_NORMAL,
+                T_LATE,
+                NUM_CROSSERS,
+                NUM_SLOTS,
+                SIM_MS,
+                (unsigned long)totalDetected,
+                (unsigned long)totalScheduled,
+                (unsigned long)totalFailed,
+                (unsigned long)successRate,
+                (unsigned long)failureRate);
+        fflush(statsFile);
+    }
 }
 
 static bool trySchedule(Vehicle *v, uint32_t *outEntry) {
@@ -247,7 +287,11 @@ static void vCrosserTask(void *arg) {
 }
 
 int main(void) {
-    srand((unsigned)time(NULL));
+    runId = (unsigned long)time(NULL);
+    srand((unsigned)runId);
+
+    initStatsFile();
+
     memset(czTable, NO_VEH, sizeof czTable);
     xMutex = xSemaphoreCreateMutex();
     crossQ = xQueueCreate(32, sizeof(Vehicle));
