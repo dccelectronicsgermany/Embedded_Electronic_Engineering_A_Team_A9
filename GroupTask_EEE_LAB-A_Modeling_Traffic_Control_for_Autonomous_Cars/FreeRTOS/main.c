@@ -100,7 +100,7 @@ static void vArrivalTask(void *arg) {
         v.id        = nextID++;
         v.lane      = lane;
         v.intent    = (Intent)(rand() % 3);
-        v.emergency = (rand() % 9 == 0);
+        v.emergency = false;
         v.czA       = CZ_MAP[lane][v.intent][0];
         v.czB       = CZ_MAP[lane][v.intent][1];
         v.czC       = CZ_MAP[lane][v.intent][2];
@@ -130,16 +130,26 @@ static void vControllerTask(void *arg) {
         for (int i = 0; i < NUM_LANES; i++)
             hasCand[i] = (xQueuePeek(laneQ[i], &cands[i], 0) == pdTRUE);
 
-        int order[NUM_LANES] = { 0,1,2,3 };        /* EMERGENCY > FIFO (REQ-11) */
-        for (int i = 0; i < NUM_LANES-1; i++) {
-            for (int j = i+1; j < NUM_LANES; j++) {
-                int a = order[i], b = order[j]; bool sw = false;
-                if (!hasCand[a] && hasCand[b]) sw = true;
-                else if (hasCand[a] && hasCand[b]) {
-                    if (cands[b].emergency && !cands[a].emergency) sw = true;
-                    else if (cands[a].emergency == cands[b].emergency && cands[b].id < cands[a].id) sw = true;
+        int order[NUM_LANES] = { 0, 1, 2, 3 };     /* FIFO between lane heads */
+        for (int i = 0; i < NUM_LANES - 1; i++) {
+            for (int j = i + 1; j < NUM_LANES; j++) {
+                int a = order[i];
+                int b = order[j];
+                bool sw = false;
+
+                if (!hasCand[a] && hasCand[b]) {
+                    sw = true;
+                } else if (hasCand[a] && hasCand[b]) {
+                    if (cands[b].id < cands[a].id) {
+                        sw = true;
+                    }
                 }
-                if (sw) { int t = order[i]; order[i] = order[j]; order[j] = t; }
+
+                if (sw) {
+                    int t = order[i];
+                    order[i] = order[j];
+                    order[j] = t;
+                }
             }
         }
 
