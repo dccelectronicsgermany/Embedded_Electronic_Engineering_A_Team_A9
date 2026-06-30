@@ -20,6 +20,7 @@
 #define SIM_MS        300    /* ms per tick */
 #define NUM_CROSSERS  8
 #define NO_CZ         255    /* zone slot unused */
+#define STATS_PRINT_EVERY 10   /* print statistics every 10 simulation ticks */
 
 typedef enum { NORTH, SOUTH, EAST, WEST } Lane;
 typedef enum { STRAIGHT, TURN_RIGHT, TURN_LEFT } Intent;
@@ -49,6 +50,11 @@ static const char *SPEED_STR[] = { "FAST","NORMAL","SLOW","STOP" };
 static int8_t   czTable[NUM_CZ][NUM_SLOTS];
 static uint32_t gTick  = 0;
 static uint8_t  nextID = 0;
+
+static uint32_t totalDetected  = 0;
+static uint32_t totalScheduled = 0;
+static uint32_t totalFailed    = 0;
+
 static QueueHandle_t laneQ[NUM_LANES], crossQ;
 static SemaphoreHandle_t xMutex;
 
@@ -56,6 +62,27 @@ static void czLabel(const Vehicle *v, char *buf, size_t n) {
     if      (v->czB == NO_CZ) snprintf(buf, n, "CZ%d only", v->czA+1);
     else if (v->czC == NO_CZ) snprintf(buf, n, "CZ%d->CZ%d", v->czA+1, v->czB+1);
     else                      snprintf(buf, n, "CZ%d->CZ%d->CZ%d", v->czA+1, v->czB+1, v->czC+1);
+}
+
+static void printStats(void) {
+    uint32_t resolved = totalScheduled + totalFailed;
+
+    uint32_t successRate = 0;
+    uint32_t failureRate = 0;
+
+    if (resolved > 0) {
+        successRate = (totalScheduled * 100U) / resolved;
+        failureRate = (totalFailed * 100U) / resolved;
+    }
+
+    printf("[STATS]  t=%-3lu  detected=%-3lu  scheduled=%-3lu  failed=%-3lu  success=%lu%%  failure=%lu%%\n",
+           (unsigned long)gTick,
+           (unsigned long)totalDetected,
+           (unsigned long)totalScheduled,
+           (unsigned long)totalFailed,
+           (unsigned long)successRate,
+           (unsigned long)failureRate);
+    fflush(stdout);
 }
 
 static bool trySchedule(Vehicle *v, uint32_t *outEntry) {
@@ -97,7 +124,10 @@ static void vArrivalTask(void *arg) {
     for (;;) {
         Vehicle v;
         memset(&v, 0, sizeof v);
-        v.id        = nextID++;
+        xSemaphoreTake(xMutex, portMAX_DELAY);
+        v.id = nextID++;
+        totalDetected++;
+        xSemaphoreGive(xMutex);
         v.lane      = lane;
         v.intent    = (Intent)(rand() % 3);
         v.emergency = false;
@@ -165,6 +195,8 @@ static void vControllerTask(void *arg) {
                     v.speed = SPEED_SLOW;
                 }
                 char cz[24]; czLabel(&v, cz, sizeof cz);
+                totalScheduled++;
+
                 printf("[SCHED]  Car#%-2d  %s  speed=%s\n", v.id, cz, SPEED_STR[v.speed]);
                 fflush(stdout);
                 toCross[nCross++] = v;
@@ -175,13 +207,20 @@ static void vControllerTask(void *arg) {
                     char cz[24];
                     czLabel(&failed, cz, sizeof cz);
 
+                    totalFailed++;
+
                     printf("[FAIL]   Car#%-2d  %s  no valid reservation inside feasible arrival window.\n",
                         failed.id, cz);
                     fflush(stdout);
                 }
             }
         }
+        if ((gTick % STATS_PRINT_EVERY) == 0) {
+            printStats();
+        }
+
         xSemaphoreGive(xMutex);
+
         for (int i = 0; i < nCross; i++)
             xQueueSend(crossQ, &toCross[i], portMAX_DELAY);
     }
