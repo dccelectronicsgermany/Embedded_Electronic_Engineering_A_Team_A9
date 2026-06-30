@@ -1,0 +1,5 @@
+
+# FreeRTOS local dependency and build outputs
+GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars/FreeRTOS/FreeRTOS-Kernel/
+GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars/FreeRTOS/intersection_sim
+GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars/FreeRTOS/*.o
