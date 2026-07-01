@@ -1,0 +1,178 @@
+m255
+K4
+z2
+!s11e vcom 2020.1 2020.02, Feb 28 2020
+13
+!s112 1.1
+!i10d 8192
+!i10e 25
+!i10f 100
+cModel Technology
+dC:/intelFPGA/20.1
+Econflict_checker
+Z0 w1782895157
+Z1 DPx3 std 6 textio 0 22 zE1`LPoLg^DX3Oz^4Fj1K3
+Z2 DPx4 ieee 14 std_logic_1164 0 22 cVAk:aDinOX8^VGI1ekP<3
+!i122 5
+Z3 dC:/git/Embedded_Electronic_Engineering_A_Team_A9/GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars/Week5_Deliverables/modelsim
+Z4 8C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\conflict_checker.vhd
+Z5 FC:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\conflict_checker.vhd
+l0
+L4 1
+V3RBf4V^[2^nBgB`cjkKEg0
+!s100 `n^G1c>DaP80^:zi^Lh[Y0
+Z6 OV;C;2020.1;71
+32
+Z7 !s110 1782895302
+!i10b 1
+Z8 !s108 1782895302.000000
+Z9 !s90 -reportprogress|300|-work|work|-2002|-explicit|-stats=none|C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\conflict_checker.vhd|
+Z10 !s107 C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\conflict_checker.vhd|
+!i113 1
+Z11 o-work work -2002 -explicit
+Z12 tExplicit 1 CvgOpt 0
+Artl
+R1
+R2
+Z13 DEx4 work 16 conflict_checker 0 22 3RBf4V^[2^nBgB`cjkKEg0
+!i122 5
+l16
+L13 13
+V;E>BBLM7W4Ke_15ojVLEA1
+!s100 FH:[h6Sm[EiO3^QEzmzFM1
+R6
+32
+R7
+!i10b 1
+R8
+R9
+R10
+!i113 1
+R11
+R12
+Ereservation_check_top
+Z14 w1782895213
+R1
+R2
+!i122 6
+R3
+Z15 8C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\reservation_check_top.vhd
+Z16 FC:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\reservation_check_top.vhd
+l0
+L4 1
+Vk5SFi:nlVLa_N8ZQNi:e80
+!s100 ;;;g;Zn7b;49XbZm^1>dC0
+R6
+32
+R7
+!i10b 1
+R8
+Z17 !s90 -reportprogress|300|-work|work|-2002|-explicit|-stats=none|C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\reservation_check_top.vhd|
+Z18 !s107 C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\reservation_check_top.vhd|
+!i113 1
+R11
+R12
+Astructural
+R13
+Z19 DEx4 work 15 route_to_cz_lut 0 22 ;a8ZR5a_bz`]D3Qi<7LkE3
+R1
+R2
+Z20 DEx4 work 21 reservation_check_top 0 22 k5SFi:nlVLa_N8ZQNi:e80
+!i122 6
+l24
+L17 32
+VC3Oh=Rh]beCQhWzXMC6Z[2
+!s100 ?9AacYP[l<[HGd_fX2>WO1
+R6
+32
+R7
+!i10b 1
+R8
+R17
+R18
+!i113 1
+R11
+R12
+Eroute_to_cz_lut
+Z21 w1782895110
+R1
+R2
+!i122 4
+R3
+Z22 8C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\route_to_cz_lut.vhd
+Z23 FC:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\route_to_cz_lut.vhd
+l0
+L5 1
+V;a8ZR5a_bz`]D3Qi<7LkE3
+!s100 z[^>@O]W:k:oNGhQ;Ng`c1
+R6
+32
+R7
+!i10b 1
+R8
+Z24 !s90 -reportprogress|300|-work|work|-2002|-explicit|-stats=none|C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\route_to_cz_lut.vhd|
+Z25 !s107 C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\route_to_cz_lut.vhd|
+!i113 1
+R11
+R12
+Artl
+R1
+R2
+R19
+!i122 4
+l15
+L14 86
+Vo?h5OA?<fFDl[CjnI[FiR3
+!s100 <TD]LPjAP5g3[oF2JDb0N1
+R6
+32
+R7
+!i10b 1
+R8
+R24
+R25
+!i113 1
+R11
+R12
+Etb_reservation_check_top
+Z26 w1782895298
+R1
+R2
+!i122 7
+R3
+Z27 8C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\tb_reservation_check_top.vhd
+Z28 FC:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\tb_reservation_check_top.vhd
+l0
+L4 1
+Vjn9Z185hKVcP5=5L7X=GV3
+!s100 Sd^96FAdm1H<QNR44MUYZ1
+R6
+32
+R7
+!i10b 1
+R8
+Z29 !s90 -reportprogress|300|-work|work|-2002|-explicit|-stats=none|C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\tb_reservation_check_top.vhd|
+!s107 C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\tb_reservation_check_top.vhd|
+!i113 1
+R11
+R12
+Asim
+R20
+R1
+R2
+DEx4 work 24 tb_reservation_check_top 0 22 jn9Z185hKVcP5=5L7X=GV3
+!i122 7
+l18
+L7 159
+V1d72:FU43b]?IzFOi2fVQ0
+!s100 HZhV5mTzMokNBYCNE^gOF3
+R6
+32
+R7
+!i10b 1
+R8
+R29
+Z30 !s107 C:\git\Embedded_Electronic_Engineering_A_Team_A9\GroupTask_EEE_LAB-A_Modeling_Traffic_Control_for_Autonomous_Cars\Week5_Deliverables\modelsim\tb_reservation_check_top.vhd|
+!i113 1
+R11
+R12

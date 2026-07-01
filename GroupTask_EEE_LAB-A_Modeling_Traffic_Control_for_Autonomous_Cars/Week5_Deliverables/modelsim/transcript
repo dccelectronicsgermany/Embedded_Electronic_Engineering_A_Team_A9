@@ -1,0 +1,36 @@
+# Compile of route_to_cz_lut.vhd was successful.
+# Compile of route_to_cz_lut.vhd was successful.
+# Compile of conflict_checker.vhd was successful.
+# Compile of reservation_check_top.vhd was successful.
+# 3 compiles, 0 failed with no errors.
+# Compile of route_to_cz_lut.vhd was successful.
+# Compile of conflict_checker.vhd was successful.
+# Compile of reservation_check_top.vhd was successful.
+# Compile of tb_reservation_check_top.vhd was successful.
+# 4 compiles, 0 failed with no errors.
+vsim -gui work.tb_reservation_check_top(sim)
+# vsim -gui work.tb_reservation_check_top(sim) 
+# Start time: 10:42:12 on Jul 01,2026
+# Loading std.standard
+# Loading std.textio(body)
+# Loading ieee.std_logic_1164(body)
+# Loading work.tb_reservation_check_top(sim)
+# Loading work.reservation_check_top(structural)
+# Loading work.route_to_cz_lut(rtl)
+# Loading work.conflict_checker(rtl)
+add wave -position end  sim:/tb_reservation_check_top/origin
+add wave -position end  sim:/tb_reservation_check_top/intent
+add wave -position end  sim:/tb_reservation_check_top/occupied_zones
+add wave -position end  sim:/tb_reservation_check_top/requested_zones
+add wave -position end  sim:/tb_reservation_check_top/valid_route
+add wave -position end  sim:/tb_reservation_check_top/conflict
+add wave -position end  sim:/tb_reservation_check_top/free_slot
+run
+run
+run
+run
+run
+run
+run
+# ** Note: All reservation checker tests completed successfully.
+#    Time: 60 ns  Iteration: 0  Instance: /tb_reservation_check_top
