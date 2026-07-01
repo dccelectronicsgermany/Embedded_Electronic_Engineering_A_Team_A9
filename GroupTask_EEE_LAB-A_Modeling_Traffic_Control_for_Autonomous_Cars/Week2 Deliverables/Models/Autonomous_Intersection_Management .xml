@@ -1,0 +1,291 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>const int N = 4;
+const int Z = 4;
+
+const int LANES = 4;
+const int INTENTS = 3;
+const int MAX_ZONES = 3;
+const int NO_CZ = 4;
+
+const int NORTH = 0;
+const int SOUTH = 1;
+const int EAST  = 2;
+const int WEST  = 3;
+
+const int STRAIGHT   = 0;
+const int TURN_RIGHT = 1;
+const int TURN_LEFT  = 2;
+
+/*
+    Timing model:
+    T_NORMAL = normal arrival time from detection point
+    T_LATE   = latest allowed arrival time
+    T_ZONE   = time spent per critical zone
+*/
+const int T_NORMAL = 6;
+const int T_LATE   = 12;
+const int T_ZONE   = 1;
+
+/*
+    Critical-zone route map.
+
+    Zone numbers:
+    0 = CZ1
+    1 = CZ2
+    2 = CZ3
+    3 = CZ4
+    4 = NO_CZ / unused
+*/
+const int route[LANES][INTENTS][MAX_ZONES] = {
+    /* NORTH */
+    {
+        {2, 0, NO_CZ},   /* straight: CZ3 -&gt; CZ1 */
+        {2, NO_CZ, NO_CZ}, /* right: CZ3 */
+        {2, 0, 1}        /* left: CZ3 -&gt; CZ1 -&gt; CZ2 */
+    },
+
+    /* SOUTH */
+    {
+        {1, 3, NO_CZ},   /* straight: CZ2 -&gt; CZ4 */
+        {1, NO_CZ, NO_CZ}, /* right: CZ2 */
+        {1, 3, 2}        /* left: CZ2 -&gt; CZ4 -&gt; CZ3 */
+    },
+
+    /* EAST */
+    {
+        {3, 2, NO_CZ},   /* straight: CZ4 -&gt; CZ3 */
+        {3, 2, 0},       /* right: CZ4 -&gt; CZ3 -&gt; CZ1 */
+        {3, NO_CZ, NO_CZ}  /* left: CZ4 */
+    },
+
+    /* WEST */
+    {
+        {0, 1, NO_CZ},   /* straight: CZ1 -&gt; CZ2 */
+        {0, 1, 3},       /* right: CZ1 -&gt; CZ2 -&gt; CZ4 */
+        {0, NO_CZ, NO_CZ}  /* left: CZ1 */
+    }
+};
+
+int[0,N] occ[Z];
+
+bool waiting[N];
+int[0,LANES-1] laneOf[N];
+int[0,INTENTS-1] turnOf[N];
+int[0,N] order[N];
+int[0,N] waitCount = 0;
+
+chan request[N];
+chan grant[N];
+chan finished[N];
+
+int routeLength(int l, int mv) {
+    int len = 0;
+
+    for (k : int[0,MAX_ZONES-1]) {
+        if (route[l][mv][k] != NO_CZ) {
+            len++;
+        }
+    }
+
+    return len;
+}
+
+int crossingTime(int l, int mv) {
+    return routeLength(l, mv) * T_ZONE;
+}
+
+bool routeFree(int l, int mv) {
+    for (k : int[0,MAX_ZONES-1]) {
+        if (route[l][mv][k] != NO_CZ &amp;&amp; occ[route[l][mv][k]] &gt; 0) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void reserve(int l, int mv) {
+    for (k : int[0,MAX_ZONES-1]) {
+        if (route[l][mv][k] != NO_CZ) {
+            occ[route[l][mv][k]]++;
+        }
+    }
+}
+
+void release(int l, int mv) {
+    for (k : int[0,MAX_ZONES-1]) {
+        if (route[l][mv][k] != NO_CZ &amp;&amp; occ[route[l][mv][k]] &gt; 0) {
+            occ[route[l][mv][k]]--;
+        }
+    }
+}
+
+bool routeConflict(int l1, int mv1, int l2, int mv2) {
+    for (a : int[0,MAX_ZONES-1]) {
+        for (b : int[0,MAX_ZONES-1]) {
+            if (route[l1][mv1][a] != NO_CZ &amp;&amp;
+                route[l1][mv1][a] == route[l2][mv2][b]) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+void startWait(int id, int l, int mv) {
+    waiting[id] = true;
+    laneOf[id] = l;
+    turnOf[id] = mv;
+    waitCount++;
+    order[id] = waitCount;
+}
+
+void endWait(int id) {
+    if (waiting[id]) {
+        for (j : int[0,N-1]) {
+            if (order[j] &gt; order[id]) {
+                order[j]--;
+            }
+        }
+
+        order[id] = 0;
+        waiting[id] = false;
+
+        if (waitCount &gt; 0) {
+            waitCount--;
+        }
+    }
+}
+
+bool mayGo(int me) {
+    for (j : int[0,N-1]) {
+        if (j != me &amp;&amp; waiting[j]) {
+            if (order[j] &lt; order[me] &amp;&amp;
+                routeConflict(laneOf[j], turnOf[j], laneOf[me], turnOf[me])) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}</declaration>
+	<template>
+		<name x="5" y="5">Vehicle</name>
+		<parameter>const int id, const int lane, const int mv</parameter>
+		<declaration>clock x;</declaration>
+		<location id="id0" x="-195" y="-68">
+			<name x="-205" y="-102">Idle</name>
+		</location>
+		<location id="id1" x="-76" y="-136">
+			<name x="-86" y="-170">Detected</name>
+		</location>
+		<location id="id2" x="93" y="-136">
+			<name x="83" y="-170">Requesting</name>
+		</location>
+		<location id="id3" x="314" y="-136">
+			<name x="255" y="-170">ControlledApproach</name>
+			<label kind="invariant" x="331" y="-153">x &lt;= T_LATE</label>
+		</location>
+		<location id="id4" x="535" y="119">
+			<name x="552" y="93">WaitingBeforeEntry</name>
+		</location>
+		<location id="id5" x="187" y="314">
+			<name x="136" y="255">InCriticalZone</name>
+			<label kind="invariant" x="76" y="331">x &lt;= crossingTime(lane, mv)</label>
+		</location>
+		<location id="id6" x="-178" y="110">
+			<name x="-170" y="76">Exited</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id7">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="guard" x="467" y="-42">x &gt;= T_NORMAL</label>
+		</transition>
+		<transition id="id8">
+			<source ref="id6"/>
+			<target ref="id0"/>
+			<label kind="synchronisation" x="-170" y="0">done!</label>
+			<label kind="assignment" x="-170" y="17">x = 0</label>
+		</transition>
+		<transition id="id9">
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="guard" x="-195" y="246">x &gt;= crossingTime(lane, mv)</label>
+			<label kind="assignment" x="-144" y="263">release(lane, mv)</label>
+		</transition>
+		<transition id="id10">
+			<source ref="id4"/>
+			<target ref="id5"/>
+			<label kind="guard" x="144" y="119">routeFree(lane, mv) &amp;&amp; mayGo(id)</label>
+			<label kind="assignment" x="135" y="144">reserve(lane, mv), endWait(id), x = 0</label>
+		</transition>
+		<transition id="id11">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="assignment" x="450" y="-25">startWait(id, lane, mv)</label>
+		</transition>
+		<transition id="id12">
+			<source ref="id2"/>
+			<target ref="id3"/>
+			<label kind="assignment" x="111" y="-136">x = 0</label>
+		</transition>
+		<transition id="id13">
+			<source ref="id1"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-58" y="-153">request[id]!</label>
+			<nail x="8" y="-136"/>
+		</transition>
+		<transition id="id14">
+			<source ref="id0"/>
+			<target ref="id1"/>
+		</transition>
+	</template>
+	<system>N0 = Vehicle(0, NORTH, STRAIGHT);
+S1 = Vehicle(1, SOUTH, STRAIGHT);
+E2 = Vehicle(2, EAST, TURN_RIGHT);
+W3 = Vehicle(3, WEST, TURN_LEFT);
+
+system N0, S1, E2, W3;</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-07-01 20:16:48 +0200">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; N0.InCriticalZone</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-07-01 20:16:51 +0200">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; S1.InCriticalZone</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-07-01 20:16:52 +0200">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; E2.InCriticalZone</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-06-26 15:04:01 +0200">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; W3.InCriticalZone</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-07-01 20:16:54 +0200">
+			</result>
+		</query>
+		<query>
+			<formula>A[] forall (z : int[0,Z-1]) occ[z] &lt;= 1</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2026-07-01 20:16:56 +0200">
+			</result>
+		</query>
+	</queries>
+</nta>
