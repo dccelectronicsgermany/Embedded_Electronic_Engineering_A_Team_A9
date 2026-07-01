@@ -173,75 +173,106 @@ bool mayGo(int me) {
     return true;
 }</declaration>
 	<template>
+		<name>Controller</name>
+		<location id="id0" x="0" y="0">
+			<name x="-10" y="-34">Idle</name>
+		</location>
+		<init ref="id0"/>
+		<transition id="id1">
+			<source ref="id0"/>
+			<target ref="id0"/>
+			<label kind="select" x="-527" y="34">i : int[0,N-1]</label>
+			<label kind="synchronisation" x="-527" y="51">finished[i]?</label>
+			<label kind="assignment" x="-527" y="68">release(laneOf[i], turnOf[i])</label>
+			<label kind="comments" x="-263" y="8">vehicle finished</label>
+			<nail x="-263" y="161"/>
+			<nail x="-272" y="-93"/>
+		</transition>
+		<transition id="id2">
+			<source ref="id0"/>
+			<target ref="id0"/>
+			<label kind="select" x="-204" y="263">i : int[0,N-1]</label>
+			<label kind="guard" x="-204" y="280">waiting[i] &amp;&amp; routeFree(laneOf[i], turnOf[i]) &amp;&amp; mayGo(i)</label>
+			<label kind="synchronisation" x="-204" y="297">grant[i]!</label>
+			<label kind="assignment" x="-204" y="314">reserve(laneOf[i], turnOf[i]), endWait(i)</label>
+			<label kind="comments" x="-68" y="187">grant access</label>
+			<nail x="119" y="238"/>
+			<nail x="-127" y="238"/>
+		</transition>
+		<transition id="id3">
+			<source ref="id0"/>
+			<target ref="id0"/>
+			<label kind="select" x="306" y="-17">i : int[0,N-1]</label>
+			<label kind="synchronisation" x="306" y="8">request[i]?</label>
+			<label kind="comments" x="127" y="34">receive request</label>
+			<nail x="297" y="-8"/>
+			<nail x="229" y="170"/>
+		</transition>
+	</template>
+	<template>
 		<name x="5" y="5">Vehicle</name>
 		<parameter>const int id, const int lane, const int mv</parameter>
 		<declaration>clock x;</declaration>
-		<location id="id0" x="-195" y="-68">
-			<name x="-205" y="-102">Idle</name>
+		<location id="id4" x="76" y="68">
+			<name x="66" y="34">Idle</name>
 		</location>
-		<location id="id1" x="-76" y="-136">
-			<name x="-86" y="-170">Detected</name>
+		<location id="id5" x="263" y="-76">
+			<name x="253" y="-110">Detected</name>
 		</location>
-		<location id="id2" x="93" y="-136">
-			<name x="83" y="-170">Requesting</name>
+		<location id="id6" x="595" y="-68">
+			<name x="585" y="-102">Requesting</name>
 		</location>
-		<location id="id3" x="314" y="-136">
-			<name x="255" y="-170">ControlledApproach</name>
-			<label kind="invariant" x="331" y="-153">x &lt;= T_LATE</label>
+		<location id="id7" x="816" y="-68">
+			<name x="757" y="-102">ControlledApproach</name>
+			<label kind="invariant" x="833" y="-85">x &lt;= T_LATE</label>
 		</location>
-		<location id="id4" x="535" y="119">
-			<name x="552" y="93">WaitingBeforeEntry</name>
+		<location id="id8" x="1037" y="187">
+			<name x="1054" y="161">WaitingBeforeEntry</name>
 		</location>
-		<location id="id5" x="187" y="314">
-			<name x="136" y="255">InCriticalZone</name>
-			<label kind="invariant" x="76" y="331">x &lt;= crossingTime(lane, mv)</label>
+		<location id="id9" x="689" y="382">
+			<name x="638" y="323">InCriticalZone</name>
+			<label kind="invariant" x="578" y="399">x &lt;= crossingTime(lane, mv)</label>
 		</location>
-		<location id="id6" x="-178" y="110">
-			<name x="-170" y="76">Exited</name>
+		<location id="id10" x="93" y="365">
+			<name x="101" y="331">Exited</name>
 		</location>
-		<init ref="id0"/>
-		<transition id="id7">
-			<source ref="id3"/>
-			<target ref="id4"/>
-			<label kind="guard" x="467" y="-42">x &gt;= T_NORMAL</label>
-		</transition>
-		<transition id="id8">
-			<source ref="id6"/>
-			<target ref="id0"/>
-			<label kind="synchronisation" x="-170" y="0">done!</label>
-			<label kind="assignment" x="-170" y="17">x = 0</label>
-		</transition>
-		<transition id="id9">
-			<source ref="id5"/>
-			<target ref="id6"/>
-			<label kind="guard" x="-195" y="246">x &gt;= crossingTime(lane, mv)</label>
-			<label kind="assignment" x="-144" y="263">release(lane, mv)</label>
-		</transition>
-		<transition id="id10">
-			<source ref="id4"/>
-			<target ref="id5"/>
-			<label kind="guard" x="144" y="119">routeFree(lane, mv) &amp;&amp; mayGo(id)</label>
-			<label kind="assignment" x="135" y="144">reserve(lane, mv), endWait(id), x = 0</label>
-		</transition>
+		<init ref="id4"/>
 		<transition id="id11">
-			<source ref="id3"/>
-			<target ref="id4"/>
-			<label kind="assignment" x="450" y="-25">startWait(id, lane, mv)</label>
+			<source ref="id7"/>
+			<target ref="id8"/>
+			<label kind="guard" x="969" y="26">x &gt;= T_NORMAL</label>
+			<label kind="assignment" x="952" y="42">startWait(id, lane, mv)</label>
 		</transition>
 		<transition id="id12">
-			<source ref="id2"/>
-			<target ref="id3"/>
-			<label kind="assignment" x="111" y="-136">x = 0</label>
+			<source ref="id10"/>
+			<target ref="id4"/>
+			<label kind="assignment" x="102" y="195">x = 0</label>
 		</transition>
 		<transition id="id13">
-			<source ref="id1"/>
-			<target ref="id2"/>
-			<label kind="synchronisation" x="-58" y="-153">request[id]!</label>
-			<nail x="8" y="-136"/>
+			<source ref="id9"/>
+			<target ref="id10"/>
+			<label kind="guard" x="263" y="331">x &gt;= crossingTime(lane, mv)</label>
+			<label kind="synchronisation" x="314" y="348">finished[id]!</label>
 		</transition>
 		<transition id="id14">
-			<source ref="id0"/>
-			<target ref="id1"/>
+			<source ref="id8"/>
+			<target ref="id9"/>
+			<label kind="synchronisation" x="901" y="272">grant[id]?</label>
+			<label kind="assignment" x="707" y="284">x = 0</label>
+		</transition>
+		<transition id="id15">
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="assignment" x="613" y="-68">x = 0</label>
+		</transition>
+		<transition id="id16">
+			<source ref="id5"/>
+			<target ref="id6"/>
+			<label kind="synchronisation" x="382" y="-93">request[id]!</label>
+		</transition>
+		<transition id="id17">
+			<source ref="id4"/>
+			<target ref="id5"/>
 		</transition>
 	</template>
 	<system>N0 = Vehicle(0, NORTH, STRAIGHT);
@@ -249,42 +280,44 @@ S1 = Vehicle(1, SOUTH, STRAIGHT);
 E2 = Vehicle(2, EAST, TURN_RIGHT);
 W3 = Vehicle(3, WEST, TURN_LEFT);
 
-system N0, S1, E2, W3;</system>
+C = Controller();
+
+system N0, S1, E2, W3, C;</system>
 	<queries>
 		<query>
 			<formula>A[] not deadlock</formula>
-			<comment/>
-			<result outcome="success" type="quality" timestamp="2026-07-01 20:16:48 +0200">
+			<comment>Checks that the model never reaches a deadlock state. This means the controller and vehicles do not get stuck permanently and at least one valid transition remains possible.</comment>
+			<result outcome="success" type="quality" timestamp="2026-07-01 22:23:04 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; N0.InCriticalZone</formula>
-			<comment/>
-			<result outcome="success" type="quality" timestamp="2026-07-01 20:16:51 +0200">
+			<comment>Checks that there exists at least one possible execution where the NORTH vehicle enters the critical zone. This confirms that the controller can grant access to N0 for its route.</comment>
+			<result outcome="success" type="quality" timestamp="2026-07-01 22:23:06 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; S1.InCriticalZone</formula>
-			<comment/>
-			<result outcome="success" type="quality" timestamp="2026-07-01 20:16:52 +0200">
+			<comment>Checks that there exists at least one possible execution where the SOUTH vehicle enters the critical zone. This confirms that S1 is not permanently blocked by the controller logic.</comment>
+			<result outcome="success" type="quality" timestamp="2026-07-01 22:23:07 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; E2.InCriticalZone</formula>
-			<comment/>
-			<result outcome="success" type="quality" timestamp="2026-06-26 15:04:01 +0200">
+			<comment>Checks that there exists at least one possible execution where the EAST vehicle enters the critical zone. This confirms that the model allows E2 to be scheduled and granted access.</comment>
+			<result outcome="success" type="quality" timestamp="2026-07-01 22:23:08 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; W3.InCriticalZone</formula>
-			<comment/>
-			<result outcome="success" type="quality" timestamp="2026-07-01 20:16:54 +0200">
+			<comment>Checks that there exists at least one possible execution where the WEST vehicle enters the critical zone. This confirms that W3 can also receive permission from the controller.</comment>
+			<result outcome="success" type="quality" timestamp="2026-07-01 22:23:09 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>A[] forall (z : int[0,Z-1]) occ[z] &lt;= 1</formula>
 			<comment/>
-			<result outcome="success" type="quality" timestamp="2026-07-01 20:16:56 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-01 22:23:10 +0200">
 			</result>
 		</query>
 	</queries>
