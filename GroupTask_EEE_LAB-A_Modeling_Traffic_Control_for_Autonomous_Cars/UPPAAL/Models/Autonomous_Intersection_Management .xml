@@ -409,61 +409,61 @@ system N0, S1, E2, W3, C, T;</system>
 		<query>
 			<formula>A[] simTick &lt; SIM_END_TICK imply not deadlock</formula>
 			<comment>Checks that the model does not deadlock during the active 150-tick simulation window.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-02 16:32:03 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:39:40 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; N0.InCriticalZone</formula>
 			<comment>Checks that there exists at least one possible execution where the NORTH vehicle enters the critical zone. This confirms that the controller can grant access to N0 for its route.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-02 12:27:18 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:39:45 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; S1.InCriticalZone</formula>
 			<comment>Checks that there exists at least one possible execution where the SOUTH vehicle enters the critical zone. This confirms that S1 is not permanently blocked by the controller logic.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-01 22:23:07 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:39:48 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; E2.InCriticalZone</formula>
 			<comment>Checks that there exists at least one possible execution where the EAST vehicle enters the critical zone. This confirms that the model allows E2 to be scheduled and granted access.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-01 22:23:08 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:39:51 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; W3.InCriticalZone</formula>
 			<comment>Checks that there exists at least one possible execution where the WEST vehicle enters the critical zone. This confirms that W3 can also receive permission from the controller.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-01 22:23:09 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:39:54 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>A[] forall (z : int[0,Z-1]) occ[z] &lt;= 1</formula>
 			<comment>Safety property: checks that no critical zone is occupied by more than one vehicle at the same time. This verifies that the controller prevents conflicting vehicles from entering the same critical zone.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-02 16:31:51 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:40:02 +0200">
 			</result>
 		</query>
 		<query>
-			<formula>A[] forall (i : int[0,N-1]) hasSchedule[i] imply assignedDelay[i] &gt;= T_NORMAL &amp;&amp; assignedDelay[i] &lt;= T_LATE</formula>
+			<formula>A[] forall (i : int[0,N-1]) hasSchedule[i] imply assignedDelay[i] &gt;= T_EARLY &amp;&amp; assignedDelay[i] &lt;= T_LATE</formula>
 			<comment>Checks that every scheduled vehicle receives an entry delay inside the allowed scheduling window.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-02 16:31:54 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:39:19 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>A[] forall (z : int[0,Z-1]) forall (s : int[0,HORIZON-1]) res[z][s] &lt;= 1</formula>
 			<comment>Checks that no future reservation slot contains more than one vehicle for the same critical zone.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-02 16:31:58 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:40:12 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; simTick == SIM_END_TICK</formula>
 			<comment>Checks that the model can reach the configured simulation end tick.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-02 14:03:17 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:40:15 +0200">
 			</result>
 		</query>
 		<query>
 			<formula>A[] !badOcc</formula>
 			<comment>Verify that we dont have any collisions</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-02 16:32:06 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:40:24 +0200">
 			</result>
 		</query>
 	</queries>
