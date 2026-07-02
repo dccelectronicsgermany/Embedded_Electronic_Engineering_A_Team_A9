@@ -24,8 +24,9 @@ const int TURN_LEFT  = 2;
     T_LATE   = latest allowed arrival time
     T_ZONE   = time spent per critical zone
 */
+const int T_EARLY  = 3;
 const int T_NORMAL = 6;
-const int T_LATE   = 8;
+const int T_LATE   = 12;
 const int T_ZONE   = 1;
 
 /*
@@ -72,7 +73,7 @@ int[0,N] occ[Z];
 
 bool badOcc = false;
 
-const int HORIZON = 12;
+const int HORIZON = 20;
 const int SIM_END_TICK = 5;
 
 int[0,HORIZON-1] now = 0;
@@ -202,7 +203,7 @@ bool candidateFree(int l, int mv, int d) {
 }
 
 bool noEarlierFree(int l, int mv, int d) {
-    for (e : int[T_NORMAL,T_LATE]) {
+    for (e : int[T_EARLY,T_LATE]) {
         if (e &lt; d &amp;&amp; candidateFree(l, mv, e)) {
             return false;
         }
@@ -276,7 +277,7 @@ void releaseStep(int l, int mv, int step) {
 		<transition id="id2">
 			<source ref="id0"/>
 			<target ref="id0"/>
-			<label kind="select" x="-204" y="263">i : int[0,N-1], d : int[T_NORMAL,T_LATE]</label>
+			<label kind="select" x="-204" y="263">i : int[0,N-1], d : int[T_EARLY,T_LATE]</label>
 			<label kind="guard" x="-204" y="280">waiting[i] &amp;&amp; candidateFree(laneOf[i], turnOf[i], d) &amp;&amp; noEarlierFree(laneOf[i], turnOf[i], d) &amp;&amp; mayGo(i)</label>
 			<label kind="synchronisation" x="-204" y="297">grant[i]!</label>
 			<label kind="assignment" x="-204" y="314">assignedDelay[i] = d,
@@ -408,6 +409,8 @@ system N0, S1, E2, W3, C, T;</system>
 		<query>
 			<formula>A[] simTick &lt; SIM_END_TICK imply not deadlock</formula>
 			<comment>Checks that the model does not deadlock during the active 150-tick simulation window.</comment>
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:32:03 +0200">
+			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; N0.InCriticalZone</formula>
@@ -436,14 +439,20 @@ system N0, S1, E2, W3, C, T;</system>
 		<query>
 			<formula>A[] forall (z : int[0,Z-1]) occ[z] &lt;= 1</formula>
 			<comment>Safety property: checks that no critical zone is occupied by more than one vehicle at the same time. This verifies that the controller prevents conflicting vehicles from entering the same critical zone.</comment>
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:31:51 +0200">
+			</result>
 		</query>
 		<query>
 			<formula>A[] forall (i : int[0,N-1]) hasSchedule[i] imply assignedDelay[i] &gt;= T_NORMAL &amp;&amp; assignedDelay[i] &lt;= T_LATE</formula>
 			<comment>Checks that every scheduled vehicle receives an entry delay inside the allowed scheduling window.</comment>
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:31:54 +0200">
+			</result>
 		</query>
 		<query>
 			<formula>A[] forall (z : int[0,Z-1]) forall (s : int[0,HORIZON-1]) res[z][s] &lt;= 1</formula>
 			<comment>Checks that no future reservation slot contains more than one vehicle for the same critical zone.</comment>
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:31:58 +0200">
+			</result>
 		</query>
 		<query>
 			<formula>E&lt;&gt; simTick == SIM_END_TICK</formula>
@@ -454,6 +463,8 @@ system N0, S1, E2, W3, C, T;</system>
 		<query>
 			<formula>A[] !badOcc</formula>
 			<comment>Verify that we dont have any collisions</comment>
+			<result outcome="success" type="quality" timestamp="2026-07-02 16:32:06 +0200">
+			</result>
 		</query>
 	</queries>
 </nta>
