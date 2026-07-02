@@ -21,7 +21,7 @@
 #define NUM_CROSSERS  8
 #define NO_CZ         255    /* zone slot unused */
 #define STATS_PRINT_EVERY 10   /* print statistics every 10 simulation ticks */
-#define SIM_END_TICK 150
+#define SIM_END_TICK 400
 #define CZ_HOLD 1                    /* ticks a car holds each zone (was 2) */
 
 #define POLICY_FIFO              0
@@ -29,7 +29,7 @@
 #define POLICY_LONGEST_ROUTE     2
 
 #define SCHED_POLICY POLICY_FIFO
-#define ALLOW_SPEED_UP 0
+#define ALLOW_SPEED_UP 1
 
 typedef enum { NORTH, SOUTH, EAST, WEST } Lane;
 typedef enum { STRAIGHT, TURN_RIGHT, TURN_LEFT } Intent;
@@ -166,7 +166,8 @@ static void printStats(void) {
 
 static bool trySchedule(Vehicle *v, uint32_t *outEntry) {
     uint8_t zones[3] = { v->czA, v->czB, v->czC };
-    for (uint32_t t = gTick + T_NORMAL; t <= gTick + T_LATE; t++) {
+    uint32_t startT = ALLOW_SPEED_UP ? T_EARLY : T_NORMAL;
+    for (uint32_t t = gTick + startT; t <= gTick + T_LATE; t++) {
         bool ok = true;
         uint32_t cur = t;
         for (int z = 0; z < 3 && ok; z++) {
@@ -252,6 +253,7 @@ static void vControllerTask(void *arg) {
                         sw = true;
                     }
                 }
+                
 
                 if (sw) {
                     int t = order[i];
@@ -269,7 +271,9 @@ static void vControllerTask(void *arg) {
                 Vehicle popped; xQueueReceive(laneQ[lane], &popped, 0);
                 v.entry = entry; v.approach = (uint8_t)(entry - gTick);
                 v.slack = (gTick + T_LATE) - entry;
-                if (entry <= gTick + T_NORMAL) {
+                if (entry < gTick + T_NORMAL) {
+                    v.speed = SPEED_FAST;
+                } else if (entry <= gTick + T_NORMAL) {
                     v.speed = SPEED_NORMAL;
                 } else {
                     v.speed = SPEED_SLOW;
