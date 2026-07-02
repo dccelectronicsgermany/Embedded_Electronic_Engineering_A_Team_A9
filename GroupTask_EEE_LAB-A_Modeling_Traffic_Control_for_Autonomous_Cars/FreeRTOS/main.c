@@ -16,18 +16,19 @@
 #define NO_VEH       -1
 #define T_EARLY       3      /* earliest arrival -> FAST   */
 #define T_NORMAL      6      /* normal arrival   -> NORMAL */
-#define T_LATE        12     /* latest arrival   -> SLOW   */
+#define T_LATE        20     /* latest arrival   -> SLOW   */
 #define SIM_MS        300    /* ms per tick */
 #define NUM_CROSSERS  8
 #define NO_CZ         255    /* zone slot unused */
 #define STATS_PRINT_EVERY 10   /* print statistics every 10 simulation ticks */
 #define SIM_END_TICK 150
+#define CZ_HOLD 1                    /* ticks a car holds each zone (was 2) */
 
 #define POLICY_FIFO              0
 #define POLICY_SHORTEST_ROUTE    1
 #define POLICY_LONGEST_ROUTE     2
 
-#define SCHED_POLICY POLICY_LONGEST_ROUTE
+#define SCHED_POLICY POLICY_FIFO
 #define ALLOW_SPEED_UP 0
 
 typedef enum { NORTH, SOUTH, EAST, WEST } Lane;
@@ -170,17 +171,17 @@ static bool trySchedule(Vehicle *v, uint32_t *outEntry) {
         uint32_t cur = t;
         for (int z = 0; z < 3 && ok; z++) {
             if (zones[z] == NO_CZ) break;
-            for (int d = 0; d < 2; d++)
+            for (int d = 0; d < CZ_HOLD; d++)
                 if (czTable[zones[z]][(cur+d) % NUM_SLOTS] != NO_VEH) { ok = false; break; }
-            cur += 2;
+            cur += CZ_HOLD;
         }
         if (!ok) continue;
         cur = t;
         for (int z = 0; z < 3; z++) {
             if (zones[z] == NO_CZ) break;
-            for (int d = 0; d < 2; d++)
+            for (int d = 0; d < CZ_HOLD; d++)
                 czTable[zones[z]][(cur+d) % NUM_SLOTS] = (int8_t)v->id;
-            cur += 2;
+            cur += CZ_HOLD;
         }
         *outEntry = t;
         return true;
@@ -336,7 +337,7 @@ static void vCrosserTask(void *arg) {
         xSemaphoreTake(xMutex, portMAX_DELAY);
         printf("[CROSS]  Car#%-2d  entering %s  (speed=%s)\n", v.id, cz, SPEED_STR[v.speed]);
         fflush(stdout); xSemaphoreGive(xMutex);
-        int crossTicks = (v.czC != NO_CZ) ? 6 : (v.czB != NO_CZ) ? 4 : 2;
+        int crossTicks = zoneCount(&v) * CZ_HOLD;
         vTaskDelay(pdMS_TO_TICKS(crossTicks * SIM_MS));
         xSemaphoreTake(xMutex, portMAX_DELAY);
         releaseSlots(v.id);
