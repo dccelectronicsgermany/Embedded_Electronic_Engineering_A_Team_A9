@@ -25,7 +25,7 @@ const int TURN_LEFT  = 2;
     T_ZONE   = time spent per critical zone
 */
 const int T_NORMAL = 6;
-const int T_LATE   = 12;
+const int T_LATE   = 8;
 const int T_ZONE   = 1;
 
 /*
@@ -69,9 +69,19 @@ const int route[LANES][INTENTS][MAX_ZONES] = {
 };
 
 int[0,N] occ[Z];
-int[0,N] reserved[Z];
-int[0,T_LATE] assignedDelay[N];
 
+const int HORIZON = 12;
+const int SIM_END_TICK = 30;
+
+int[0,HORIZON-1] now = 0;
+int[0,SIM_END_TICK] simTick = 0;
+int[0,N] res[Z][HORIZON];
+
+int[0,T_LATE] assignedDelay[N];
+int[0,HORIZON-1] assignedEntrySlot[N];
+bool hasSchedule[N];
+
+bool spawned[N];
 bool waiting[N];
 int[0,LANES-1] laneOf[N];
 int[0,INTENTS-1] turnOf[N];
@@ -106,32 +116,6 @@ bool routeFree(int l, int mv) {
     }
 
     return true;
-}
-
-bool futureFree(int l, int mv) {
-    for (k : int[0,MAX_ZONES-1]) {
-        if (route[l][mv][k] != NO_CZ &amp;&amp; reserved[route[l][mv][k]] &gt; 0) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-void reserveFuture(int l, int mv) {
-    for (k : int[0,MAX_ZONES-1]) {
-        if (route[l][mv][k] != NO_CZ) {
-            reserved[route[l][mv][k]]++;
-        }
-    }
-}
-
-void releaseFuture(int l, int mv) {
-    for (k : int[0,MAX_ZONES-1]) {
-        if (route[l][mv][k] != NO_CZ &amp;&amp; reserved[route[l][mv][k]] &gt; 0) {
-            reserved[route[l][mv][k]]--;
-        }
-    }
 }
 
 void reserve(int l, int mv) {
@@ -199,6 +183,65 @@ bool mayGo(int me) {
     }
 
     return true;
+}
+
+bool candidateFree(int l, int mv, int d) {
+    for (k : int[0,MAX_ZONES-1]) {
+        if (route[l][mv][k] != NO_CZ) {
+            for (q : int[0,T_ZONE-1]) {
+                if (res[route[l][mv][k]][(now + d + k*T_ZONE + q) % HORIZON] &gt; 0) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+bool noEarlierFree(int l, int mv, int d) {
+    for (e : int[T_NORMAL,T_LATE]) {
+        if (e &lt; d &amp;&amp; candidateFree(l, mv, e)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void reserveCandidate(int l, int mv, int d) {
+    for (k : int[0,MAX_ZONES-1]) {
+        if (route[l][mv][k] != NO_CZ) {
+            for (q : int[0,T_ZONE-1]) {
+                res[route[l][mv][k]][(now + d + k*T_ZONE + q) % HORIZON]++;
+            }
+        }
+    }
+}
+
+void releaseCandidateAt(int l, int mv, int startSlot) {
+    for (k : int[0,MAX_ZONES-1]) {
+        if (route[l][mv][k] != NO_CZ) {
+            for (q : int[0,T_ZONE-1]) {
+                if (res[route[l][mv][k]][(startSlot + k*T_ZONE + q) % HORIZON] &gt; 0) {
+                    res[route[l][mv][k]][(startSlot + k*T_ZONE + q) % HORIZON]--;
+                }
+            }
+        }
+    }
+}
+
+/*Step by step going through the Zones and not all zones at once*/
+void occupyStep(int l, int mv, int step) {
+    if (route[l][mv][step] != NO_CZ) {
+        occ[route[l][mv][step]]++;
+    }
+}
+
+void releaseStep(int l, int mv, int step) {
+    if (route[l][mv][step] != NO_CZ &amp;&amp; occ[route[l][mv][step]] &gt; 0) {
+        occ[route[l][mv][step]]--;
+    }
 }</declaration>
 	<template>
 		<name>Controller</name>
@@ -209,9 +252,9 @@ bool mayGo(int me) {
 		<transition id="id1">
 			<source ref="id0"/>
 			<target ref="id0"/>
-			<label kind="select" x="-527" y="34">i : int[0,N-1]</label>
-			<label kind="synchronisation" x="-527" y="51">finished[i]?</label>
-			<label kind="assignment" x="-527" y="68">release(laneOf[i], turnOf[i]), releaseFuture(laneOf[i], turnOf[i])</label>
+			<label kind="select" x="-399" y="42">i : int[0,N-1]</label>
+			<label kind="synchronisation" x="-399" y="59">finished[i]?</label>
+			<label kind="assignment" x="-977" y="85">releaseCandidateAt(laneOf[i], turnOf[i], assignedEntrySlot[i]), hasSchedule[i] = false</label>
 			<label kind="comments" x="-263" y="8">vehicle finished</label>
 			<nail x="-263" y="161"/>
 			<nail x="-272" y="-93"/>
@@ -220,9 +263,13 @@ bool mayGo(int me) {
 			<source ref="id0"/>
 			<target ref="id0"/>
 			<label kind="select" x="-204" y="263">i : int[0,N-1], d : int[T_NORMAL,T_LATE]</label>
-			<label kind="guard" x="-204" y="280">waiting[i] &amp;&amp; futureFree(laneOf[i], turnOf[i]) &amp;&amp; mayGo(i)</label>
+			<label kind="guard" x="-204" y="280">waiting[i] &amp;&amp; candidateFree(laneOf[i], turnOf[i], d) &amp;&amp; noEarlierFree(laneOf[i], turnOf[i], d) &amp;&amp; mayGo(i)</label>
 			<label kind="synchronisation" x="-204" y="297">grant[i]!</label>
-			<label kind="assignment" x="-204" y="314">assignedDelay[i] = d, reserveFuture(laneOf[i], turnOf[i]), endWait(i)</label>
+			<label kind="assignment" x="-204" y="314">assignedDelay[i] = d,
+assignedEntrySlot[i] = (now + d) % HORIZON,
+hasSchedule[i] = true,
+reserveCandidate(laneOf[i], turnOf[i], d),
+endWait(i)</label>
 			<label kind="comments" x="-68" y="187">grant access</label>
 			<nail x="119" y="238"/>
 			<nail x="-127" y="238"/>
@@ -238,70 +285,103 @@ bool mayGo(int me) {
 		</transition>
 	</template>
 	<template>
+		<name>Tick</name>
+		<declaration>clock t;</declaration>
+		<location id="id4" x="0" y="0">
+			<name x="-10" y="-34">Wait</name>
+			<label kind="invariant" x="25" y="-8">t &lt;= 1</label>
+		</location>
+		<init ref="id4"/>
+		<transition id="id5">
+			<source ref="id4"/>
+			<target ref="id4"/>
+			<label kind="guard" x="-620" y="34">t &gt;= 1 &amp;&amp; simTick &lt; SIM_END_TICK</label>
+			<label kind="assignment" x="-620" y="68">t = 0, now = (now + 1) % HORIZON, simTick = simTick + 1</label>
+			<nail x="-144" y="144"/>
+			<nail x="-195" y="-34"/>
+		</transition>
+	</template>
+	<template>
 		<name x="5" y="5">Vehicle</name>
 		<parameter>const int id, const int lane, const int mv</parameter>
-		<declaration>clock x;</declaration>
-		<location id="id4" x="76" y="68">
-			<name x="66" y="34">Idle</name>
+		<declaration>clock x;
+int[0,MAX_ZONES-1] zoneStep = 0;</declaration>
+		<location id="id6" x="-187" y="17">
+			<name x="-197" y="-17">Idle</name>
 		</location>
-		<location id="id5" x="170" y="-127">
+		<location id="id7" x="170" y="-127">
 			<name x="160" y="-161">Detected</name>
 		</location>
-		<location id="id6" x="544" y="-221">
+		<location id="id8" x="544" y="-221">
 			<name x="534" y="-255">Requesting</name>
 		</location>
-		<location id="id7" x="816" y="-68">
+		<location id="id9" x="816" y="-68">
 			<name x="816" y="-110">ControlledApproach</name>
 			<label kind="invariant" x="833" y="-85">x &lt;= assignedDelay[id]</label>
 		</location>
-		<location id="id8" x="1037" y="187">
+		<location id="id10" x="1037" y="187">
 			<name x="1054" y="161">WaitingBeforeEntry</name>
+			<committed/>
 		</location>
-		<location id="id9" x="689" y="382">
-			<name x="638" y="323">InCriticalZone</name>
-			<label kind="invariant" x="578" y="399">x &lt;= crossingTime(lane, mv)</label>
+		<location id="id11" x="714" y="365">
+			<name x="654" y="272">InCriticalZone</name>
+			<label kind="invariant" x="662" y="297">x &lt;= T_ZONE</label>
 		</location>
-		<location id="id10" x="93" y="365">
+		<location id="id12" x="93" y="365">
 			<name x="101" y="331">Exited</name>
 		</location>
-		<init ref="id4"/>
-		<transition id="id11">
-			<source ref="id7"/>
-			<target ref="id8"/>
-			<label kind="guard" x="926" y="42">x &gt;= assignedDelay[id]</label>
-		</transition>
-		<transition id="id12">
-			<source ref="id10"/>
-			<target ref="id4"/>
-			<label kind="assignment" x="102" y="195">x = 0</label>
-		</transition>
+		<init ref="id6"/>
 		<transition id="id13">
-			<source ref="id9"/>
-			<target ref="id10"/>
-			<label kind="guard" x="263" y="331">x &gt;= crossingTime(lane, mv)</label>
-			<label kind="synchronisation" x="314" y="348">finished[id]!</label>
+			<source ref="id11"/>
+			<target ref="id11"/>
+			<label kind="guard" x="578" y="510">x &gt;= T_ZONE &amp;&amp; zoneStep + 1 &lt; routeLength(lane, mv)</label>
+			<label kind="assignment" x="637" y="544">releaseStep(lane, mv, zoneStep),
+occupyStep(lane, mv, zoneStep + 1),
+zoneStep = zoneStep + 1,
+x = 0</label>
+			<nail x="857" y="467"/>
+			<nail x="654" y="476"/>
 		</transition>
 		<transition id="id14">
-			<source ref="id8"/>
-			<target ref="id9"/>
-			<label kind="guard" x="707" y="250">routeFree(lane, mv)</label>
-			<label kind="assignment" x="901" y="272">reserve(lane, mv), x = 0</label>
+			<source ref="id9"/>
+			<target ref="id10"/>
+			<label kind="guard" x="926" y="42">x &gt;= assignedDelay[id]</label>
 		</transition>
 		<transition id="id15">
-			<source ref="id6"/>
-			<target ref="id7"/>
+			<source ref="id12"/>
+			<target ref="id6"/>
+			<label kind="assignment" x="-59" y="161">x = 0</label>
+		</transition>
+		<transition id="id16">
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="guard" x="221" y="374">x &gt;= T_ZONE &amp;&amp; zoneStep + 1 == routeLength(lane, mv)</label>
+			<label kind="synchronisation" x="323" y="340">finished[id]!</label>
+			<label kind="assignment" x="255" y="391">releaseStep(lane, mv, zoneStep)</label>
+		</transition>
+		<transition id="id17">
+			<source ref="id10"/>
+			<target ref="id11"/>
+			<label kind="guard" x="732" y="242">now == assignedEntrySlot[id]</label>
+			<label kind="assignment" x="901" y="272">zoneStep = 0, occupyStep(lane, mv, 0), x = 0</label>
+		</transition>
+		<transition id="id18">
+			<source ref="id8"/>
+			<target ref="id9"/>
 			<label kind="synchronisation" x="646" y="-204">grant[id]?</label>
 			<label kind="assignment" x="646" y="-187">x = 0</label>
 		</transition>
-		<transition id="id16">
-			<source ref="id5"/>
-			<target ref="id6"/>
+		<transition id="id19">
+			<source ref="id7"/>
+			<target ref="id8"/>
 			<label kind="synchronisation" x="382" y="-153">request[id]!</label>
 			<label kind="assignment" x="281" y="-132">startWait(id, lane, mv)</label>
 		</transition>
-		<transition id="id17">
-			<source ref="id4"/>
-			<target ref="id5"/>
+		<transition id="id20">
+			<source ref="id6"/>
+			<target ref="id7"/>
+			<label kind="guard" x="-153" y="-93">!spawned[id] &amp;&amp; simTick &lt; SIM_END_TICK</label>
+			<label kind="assignment" x="-169" y="-55">spawned[id] = true</label>
 		</transition>
 	</template>
 	<system>N0 = Vehicle(0, NORTH, STRAIGHT);
@@ -310,19 +390,18 @@ E2 = Vehicle(2, EAST, TURN_RIGHT);
 W3 = Vehicle(3, WEST, TURN_LEFT);
 
 C = Controller();
+T = Tick();
 
-system N0, S1, E2, W3, C;</system>
+system N0, S1, E2, W3, C, T;</system>
 	<queries>
 		<query>
-			<formula>A[] not deadlock</formula>
-			<comment>Checks that the model never reaches a deadlock state. This means the controller and vehicles do not get stuck permanently and at least one valid transition remains possible.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-01 22:56:18 +0200">
-			</result>
+			<formula>A[] simTick &lt; SIM_END_TICK imply not deadlock</formula>
+			<comment>Checks that the model does not deadlock during the active 150-tick simulation window.</comment>
 		</query>
 		<query>
 			<formula>E&lt;&gt; N0.InCriticalZone</formula>
 			<comment>Checks that there exists at least one possible execution where the NORTH vehicle enters the critical zone. This confirms that the controller can grant access to N0 for its route.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-01 22:23:06 +0200">
+			<result outcome="success" type="quality" timestamp="2026-07-02 12:27:18 +0200">
 			</result>
 		</query>
 		<query>
@@ -350,10 +429,16 @@ system N0, S1, E2, W3, C;</system>
 			</result>
 		</query>
 		<query>
-			<formula>A[] forall (i : int[0,N-1]) assignedDelay[i] &lt;= T_LATE</formula>
-			<comment>Checks that every assigned vehicle entry delay remains within the latest allowed arrival time.</comment>
-			<result outcome="success" type="quality" timestamp="2026-07-01 22:53:48 +0200">
-			</result>
+			<formula>A[] forall (i : int[0,N-1]) hasSchedule[i] imply assignedDelay[i] &gt;= T_NORMAL &amp;&amp; assignedDelay[i] &lt;= T_LATE</formula>
+			<comment>Checks that every scheduled vehicle receives an entry delay inside the allowed scheduling window.</comment>
+		</query>
+		<query>
+			<formula>A[] forall (z : int[0,Z-1]) forall (s : int[0,HORIZON-1]) res[z][s] &lt;= 1</formula>
+			<comment>Checks that no future reservation slot contains more than one vehicle for the same critical zone.</comment>
+		</query>
+		<query>
+			<formula>E&lt;&gt; simTick == SIM_END_TICK</formula>
+			<comment>Checks that the model can reach the configured simulation end tick.</comment>
 		</query>
 	</queries>
 </nta>
