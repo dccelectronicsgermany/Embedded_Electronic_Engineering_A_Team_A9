@@ -16,7 +16,7 @@ Hardware/Software Co-Design of an Autonomous Intersection Management System
 
 **Author**
 
-Daniel Chidi Chimezie
+Daniel Chidi Chimezie,Rionela Kovaci,Christian Percival and Jaleel Ur Rehman
 
 **University**
 
